@@ -89,7 +89,6 @@ import com.rainy.token.ui.components.ServiceIcon
 import com.rainy.token.ui.components.StatusChip
 import com.rainy.token.ui.components.StatusLevel
 import com.rainy.token.ui.components.StatusStyle
-import com.rainy.token.ui.components.AppTips
 import com.rainy.token.ui.components.asString
 import com.rainy.token.ui.theme.inkMuted
 import com.rainy.token.ui.theme.StrawberryPink
@@ -269,14 +268,6 @@ fun DashboardScreen(
                             .padding(contentPadding),
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        // 随机小技巧提示（每次启动随机一条）
-                        val tipTextRes = remember { AppTips.randomHintRes() }
-                        Text(
-                            text = "💡 " + stringResource(tipTextRes),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = inkMuted(),
-                            modifier = Modifier.padding(horizontal = 4.dp)
-                        )
                         val items = rememberDashboardItems(
                             cards = uiState.cards,
                             order = cardOrder,

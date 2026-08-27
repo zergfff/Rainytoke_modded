@@ -15,9 +15,14 @@ import com.rainy.token.data.cache.BalanceCache
 import com.rainy.token.data.cache.balanceCacheDataStore
 import com.rainy.token.domain.service.ServiceType
 import com.rainy.token.ui.components.normalizeWindowLabel
+import com.rainy.token.ui.theme.ThemePresets
+import com.rainy.token.data.local.appSettingsStore
 import com.rainy.token.util.LocaleManager
+import androidx.compose.ui.graphics.toArgb
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import java.text.SimpleDateFormat
+import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 import kotlin.math.roundToInt
@@ -25,14 +30,13 @@ import kotlin.math.roundToInt
 /**
  * OpenCode Go 桌面小组件（MIUI Widget）。
  *
- * 显示 3 个用量窗口（5h / 本周 / 本月）的百分比 + 进度条 + 重置倒计时 + DeepSeek 余额。
- *
- * 刷新路径：
- * - MIUI 曝光刷新：用户划到负一屏 → miui.appwidget.action.APPWIDGET_UPDATE → onReceive → onUpdate
- * - 标准定时刷新：系统 30min 定时 → android.appwidget.action.APPWIDGET_UPDATE → onUpdate
- * - 手动 ↻ 按钮：PendingIntent 直通 WidgetRefreshReceiver → 网络请求 → notifyDataChanged
- * - APP 内刷新：notifyDataChanged() → 广播 ACTION_APPWIDGET_UPDATE → onUpdate
- * - 缓存为空/过期时 onUpdate 自动触发后台刷新
+ * 改版功能：
+ * - 多服务选择（从 AppSettingsStore 读取）
+ * - 顶部时钟/日期/星期/天气行
+ * - 三区点击跳转（WidgetIntentHelper）
+ * - 主题强调色
+ * - 可调刷新冷却
+ * - clock-only 更新路径（EXTRA_CLOCK_ONLY，只更新时钟不刷新余额）
  */
 class OpenCodeGoWidgetProvider : AppWidgetProvider() {
 
@@ -41,6 +45,15 @@ class OpenCodeGoWidgetProvider : AppWidgetProvider() {
             ACTION_SWITCH_SERVICE -> {
                 switchDisplayService(context)
                 notifyDataChanged(context)
+            }
+            EXTRA_CLOCK_ONLY -> {
+                // Clock-only 更新：只更新时钟/日期/天气，不触发余额刷新
+                val appWidgetManager = AppWidgetManager.getInstance(context)
+                val component = ComponentName(context, OpenCodeGoWidgetProvider::class.java)
+                val ids = appWidgetManager.getAppWidgetIds(component)
+                if (ids.isNotEmpty()) {
+                    onUpdate(context, appWidgetManager, ids, clockOnly = true)
+                }
             }
             "miui.appwidget.action.APPWIDGET_UPDATE" -> {
                 val appWidgetIds = intent.getIntArrayExtra(AppWidgetManager.EXTRA_APPWIDGET_IDS)
@@ -57,47 +70,89 @@ class OpenCodeGoWidgetProvider : AppWidgetProvider() {
         appWidgetManager: AppWidgetManager,
         appWidgetIds: IntArray
     ) {
-        var selectedHasCachedData = false
+        onUpdate(context, appWidgetManager, appWidgetIds, clockOnly = false)
+    }
 
-        // 每次渲染都用最新语言偏好重新包装 context：Application 层的 wrap 在进程启动时固定，
-        // 应用内切换语言后不会自动更新，必须在这里按当前偏好重建，否则 widget 文本停留在旧语言
+    private fun onUpdate(
+        context: Context,
+        appWidgetManager: AppWidgetManager,
+        appWidgetIds: IntArray,
+        clockOnly: Boolean = false
+    ) {
+        var selectedHasCachedData = false
         val localized = LocaleManager.wrapContext(context)
+
+        // 读取主题色
+        val themeKey = runBlocking {
+            try { context.applicationContext.appSettingsStore.themeKey.first() } catch (_: Exception) { "strawberry" }
+        }
+        val accentColor = ThemePresets.primaryColor(themeKey).toArgb()
 
         for (widgetId in appWidgetIds) {
             val views = RemoteViews(context.packageName, R.layout.widget_opencode_go)
 
-            // 署名动态设置：与行标签同源（跟随应用内语言），
-            // 避免 XML 静态文本由宿主进程按系统语言渲染造成中英混搭
-            views.setTextViewText(R.id.widget_brand, localized.getString(R.string.widget_brand))
+            // ─── 时钟/日期/星期/天气行 ───
+            updateClockRow(views, localized)
 
-            // DeepSeek 余额标签同样动态设置（静态 XML 文本由 Launcher 按系统语言解析）
+            // ─── 品牌名 ───
+            views.setTextViewText(R.id.widget_brand, localized.getString(R.string.widget_brand))
+            views.setTextColor(R.id.widget_brand, accentColor)
+
+            // DeepSeek 余额标签
             views.setTextViewText(R.id.widget_ds_label, localized.getString(R.string.widget_deepseek_balance))
 
-            // 点击左上角品牌 → 打开 APP；点击其它内容区域 → 切换服务；刷新按钮单独刷新。
+            // 时钟行点击 → 打开时钟
+            val clockIntent = PendingIntent.getActivity(
+                context, 10, WidgetIntentHelper.clockIntent(context),
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+            views.setOnClickPendingIntent(R.id.widget_time, clockIntent)
+            views.setOnClickPendingIntent(R.id.widget_weekday, clockIntent)
+            views.setOnClickPendingIntent(R.id.widget_date, clockIntent)
+
+            // 天气行点击 → 打开天气
+            views.setOnClickPendingIntent(R.id.widget_weather, PendingIntent.getActivity(
+                context, 11, WidgetIntentHelper.weatherIntent(context),
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            ))
+
+            // 品牌 → 打开 APP
             val openAppIntent = Intent(context, MainActivity::class.java).apply {
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
             }
-            val openAppPendingIntent = PendingIntent.getActivity(
+            views.setOnClickPendingIntent(R.id.widget_wordmark, PendingIntent.getActivity(
                 context, 0, openAppIntent,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-            )
-            views.setOnClickPendingIntent(R.id.widget_wordmark, openAppPendingIntent)
-            views.setOnClickPendingIntent(R.id.widget_open_hint, openAppPendingIntent)
-
-            val switchPendingIntent = PendingIntent.getBroadcast(
-                context, 2, Intent(context, OpenCodeGoWidgetProvider::class.java).apply { action = ACTION_SWITCH_SERVICE },
+            ))
+            views.setOnClickPendingIntent(R.id.widget_open_hint, PendingIntent.getActivity(
+                context, 0, openAppIntent,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-            )
-            views.setOnClickPendingIntent(R.id.widget_content, switchPendingIntent)
-            views.setOnClickPendingIntent(R.id.widget_switch, switchPendingIntent)
-            views.setOnClickPendingIntent(R.id.widget_service_title, switchPendingIntent)
+            ))
 
-            // 刷新按钮 → 后台广播刷新
-            val refreshPendingIntent = PendingIntent.getBroadcast(
+            // 刷新按钮
+            views.setOnClickPendingIntent(R.id.widget_refresh, PendingIntent.getBroadcast(
                 context, 1, WidgetRefreshReceiver.createIntent(context),
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            ))
+
+            // 服务区点击 → 跳转日历
+            val calendarPi = PendingIntent.getActivity(
+                context, 12, WidgetIntentHelper.calendarIntent(context),
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
-            views.setOnClickPendingIntent(R.id.widget_refresh, refreshPendingIntent)
+            views.setOnClickPendingIntent(R.id.widget_service_title, calendarPi)
+
+            // 切换服务
+            views.setOnClickPendingIntent(R.id.widget_switch, PendingIntent.getBroadcast(
+                context, 2, Intent(context, OpenCodeGoWidgetProvider::class.java).apply {
+                    action = ACTION_SWITCH_SERVICE
+                },
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            ))
+
+            // 应用主题强调色
+            views.setTextColor(R.id.widget_switch, accentColor)
+            views.setTextColor(R.id.widget_refresh, accentColor)
 
             // 读缓存并填充数据
             runBlocking {
@@ -111,7 +166,6 @@ class OpenCodeGoWidgetProvider : AppWidgetProvider() {
                         localized.getString(R.string.widget_service_quota, selectedService.displayName)
                     )
                     views.setImageViewResource(R.id.widget_logo, widgetLogo(selectedService))
-                    // Ollama logo 是正方形，XML 默认 22x12 是给宽扁 logo 的
                     if (selectedService == ServiceType.OLLAMA) {
                         views.setViewLayoutWidth(R.id.widget_logo, 14f, TypedValue.COMPLEX_UNIT_DIP)
                         views.setViewLayoutHeight(R.id.widget_logo, 14f, TypedValue.COMPLEX_UNIT_DIP)
@@ -156,11 +210,46 @@ class OpenCodeGoWidgetProvider : AppWidgetProvider() {
             appWidgetManager.updateAppWidget(widgetId, views)
         }
 
-        // 自动刷新：缓存为空 或 超过冷却时间 → 触发后台刷新
-        if (!selectedHasCachedData || shouldAutoRefresh(context)) {
+        // 自动刷新（非 clock-only 模式）
+        if (!clockOnly && (!selectedHasCachedData || shouldAutoRefresh(context))) {
             markAutoRefreshTime(context)
             context.sendBroadcast(WidgetRefreshReceiver.createIntent(context))
         }
+    }
+
+    /** 更新时钟行：时间、星期、日期、天气 */
+    private fun updateClockRow(views: RemoteViews, context: Context) {
+        val cal = Calendar.getInstance()
+        val timeFmt = SimpleDateFormat("HH:mm", Locale.getDefault())
+        val dateFmt = SimpleDateFormat("MM/dd", Locale.getDefault())
+        val weekdayFmt = SimpleDateFormat("EEEE", Locale.getDefault())
+
+        views.setTextViewText(R.id.widget_time, timeFmt.format(Date()))
+        views.setTextViewText(R.id.widget_date, dateFmt.format(Date()))
+
+        // 星期缩写
+        val weekday = weekdayFmt.format(Date())
+        val weekdayShort = when {
+            weekday.startsWith("Mon") -> "Mon"
+            weekday.startsWith("Tue") -> "Tue"
+            weekday.startsWith("Wed") -> "Wed"
+            weekday.startsWith("Thu") -> "Thu"
+            weekday.startsWith("Fri") -> "Fri"
+            weekday.startsWith("Sat") -> "Sat"
+            weekday.startsWith("Sun") -> "Sun"
+            else -> weekday.take(3)
+        }
+        views.setTextViewText(R.id.widget_weekday, weekdayShort)
+
+        // 天气（从 AppSettingsStore 读取缓存的城市 + 温度）
+        val weatherText = runBlocking {
+            try {
+                val store = context.applicationContext.appSettingsStore
+                val city = store.weatherCity.first()
+                if (city.isNotBlank()) city else ""
+            } catch (_: Exception) { "" }
+        }
+        views.setTextViewText(R.id.widget_weather, weatherText)
     }
 
     private fun populateServiceRows(
@@ -206,7 +295,6 @@ class OpenCodeGoWidgetProvider : AppWidgetProvider() {
                 val weeklyLabel = context.getString(R.string.window_every_week)
                 val monthlyLabel = context.getString(R.string.window_every_month)
                 val usageLabel = context.getString(R.string.window_usage)
-                // 仅主模型窗口进入桌面组件；Spark 独立限额为次要通道，不占用组件行位
                 val normal = mutableListOf<Triple<String, Int?, Long?>>()
                 for (index in 0 until windowCount) {
                     if (extras["window_$index.group"] == "SPARK") continue
@@ -221,9 +309,7 @@ class OpenCodeGoWidgetProvider : AppWidgetProvider() {
                     val resetAt = extras["window_$index.resetAt"]?.toLongOrNull()?.takeIf { it > 0 }
                     normal.add(Triple(label, remaining?.let { (100 - it).coerceIn(0, 100) }, resetAt?.let { (it - System.currentTimeMillis()) / 1000 }?.takeIf { it > 0 }))
                 }
-                // 判断是否有 5h 窗口
                 val has5h = normal.any { it.first.contains("5") }
-                // 始终保留 5h 槽位在第一行（按索引取行，避免内容相同的窗口被误过滤）
                 val row1Idx = if (has5h) (normal.indexOfFirst { it.first.contains("5") }.takeIf { it >= 0 } ?: 0) else -1
                 val row1 = if (row1Idx >= 0) normal[row1Idx] else Triple("5h", null, null)
                 val otherWindows = normal.filterIndexed { idx, _ -> idx != row1Idx }
@@ -248,12 +334,10 @@ class OpenCodeGoWidgetProvider : AppWidgetProvider() {
                 populateRow(views, R.id.row2_pct, R.id.row2_bar, R.id.row2_reset,
                     pct = extras["weekly.pct"]?.toFloatOrNull()?.toInt(),
                     resetSec = extras["weekly.resetAt"]?.toLongOrNull()?.let { (it - System.currentTimeMillis()) / 1000 }?.takeIf { it > 0 })
-                // 第三行清空（Ollama 没有月度窗口）
                 views.setTextViewText(R.id.row3_label, "")
                 views.setTextViewText(R.id.row3_pct, "")
                 views.setProgressBar(R.id.row3_bar, 100, 0, false)
                 views.setTextViewText(R.id.row3_reset, "")
-                // Plan 信息合并到标题行
                 val plan = extras["plan"] ?: ""
                 val titleText = if (plan.isNotEmpty()) {
                     context.getString(R.string.widget_quota_with_plan, service.displayName, plan)
@@ -294,14 +378,13 @@ class OpenCodeGoWidgetProvider : AppWidgetProvider() {
         }
     }
 
-    /** 根据用量百分比动态改进度条颜色 */
     private fun setProgressColor(views: RemoteViews, barViewId: Int, pct: Int) {
         val color = when {
-            pct >= 80 -> 0xFFE91E63.toInt()   // 玫红
-            pct >= 50 -> 0xFFFFA726.toInt()   // 暖橙
-            else -> 0xFFFF85A2.toInt()         // 草莓粉
+            pct >= 80 -> 0xFFE91E63
+            pct >= 50 -> 0xFFFFA726
+            else -> 0xFFFF85A2
         }
-        views.setColorStateList(barViewId, "setProgressTintList", ColorStateList.valueOf(color))
+        views.setColorStateList(barViewId, "setProgressTintList", ColorStateList.valueOf(color.toInt()))
     }
 
     private fun setEmptyState(views: RemoteViews, context: Context) {
@@ -319,8 +402,9 @@ class OpenCodeGoWidgetProvider : AppWidgetProvider() {
     }
 
     companion object {
+        const val EXTRA_CLOCK_ONLY = "com.rainy.token.action.CLOCK_ONLY_UPDATE"
 
-        /** 两次自动刷新的最小间隔（5分钟），防止频繁网络请求 */
+        /** 两次自动刷新的最小间隔（默认 5 分钟），防止频繁网络请求 */
         private const val AUTO_REFRESH_COOLDOWN_MS = 5 * 60 * 1000L
         private const val PREFS_NAME = "widget_auto_refresh"
         private const val KEY_LAST_AUTO_REFRESH = "last_auto_refresh"
@@ -362,18 +446,14 @@ class OpenCodeGoWidgetProvider : AppWidgetProvider() {
         }
 
         private fun widgetLogo(service: ServiceType): Int = when (service) {
-            ServiceType.OPENCODE_GO, ServiceType.COMMANDCODE_GO -> R.drawable.ic_opencode_go_logo_widget // PNG for RemoteViews compatibility
-            ServiceType.CODEX -> R.drawable.ic_codex_logo_widget // PNG for RemoteViews compatibility
+            ServiceType.OPENCODE_GO, ServiceType.COMMANDCODE_GO -> R.drawable.ic_opencode_go_logo_widget
+            ServiceType.CODEX -> R.drawable.ic_codex_logo_widget
             ServiceType.DEEPSEEK -> R.drawable.ic_deepseek_logo
             ServiceType.OLLAMA -> R.drawable.ic_ollama_logo_widget
         }
 
-        /**
-         * APP 内刷新后主动更新 Widget。
-         * 同时更新自动刷新时间戳，避免后续 onUpdate() 重复触发网络请求。
-         */
         fun notifyDataChanged(context: Context) {
-            markAutoRefreshTime(context) // 重置冷却计时器
+            markAutoRefreshTime(context)
             val appWidgetManager = AppWidgetManager.getInstance(context)
             val component = ComponentName(context, OpenCodeGoWidgetProvider::class.java)
             val ids = appWidgetManager.getAppWidgetIds(component)
@@ -387,7 +467,6 @@ class OpenCodeGoWidgetProvider : AppWidgetProvider() {
         }
 
         fun showRefreshing(context: Context) {
-            // 与 onUpdate 同理：用最新语言偏好包装，避免进程启动后切换语言不生效
             val localized = LocaleManager.wrapContext(context)
             val appWidgetManager = AppWidgetManager.getInstance(context)
             val component = ComponentName(context, OpenCodeGoWidgetProvider::class.java)

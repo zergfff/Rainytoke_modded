@@ -557,4 +557,29 @@
     <string name="month_12">Dec</string>
     <string name="field_api_key">API Key</string>
     <string name="field_workspace_id">Workspace ID</string>
+
+    <!-- ══════════ HyperOS 3 Widget 外观设置 ══════════ -->
+    <string name="title_widget_appearance">Widget Appearance</string>
+    <string name="title_widget">Widget</string>
+    <string name="title_theme">Theme</string>
+    <string name="title_font_size">Font Size</string>
+    <string name="title_widget_services">Widget Services</string>
+    <string name="title_widget_refresh">Refresh Interval</string>
+    <string name="title_weather">Weather</string>
+    <string name="theme_strawberry">Strawberry Pink</string>
+    <string name="theme_sky">Sky Blue</string>
+    <string name="theme_mint">Mint Green</string>
+    <string name="theme_lilac">Lilac Purple</string>
+    <string name="theme_material_you">Material You</string>
+    <string name="font_small">Small (0.85x)</string>
+    <string name="font_normal">Normal (1.0x)</string>
+    <string name="font_large">Large (1.15x)</string>
+    <string name="font_extra_large">Extra Large (1.3x)</string>
+    <string name="refresh_interval">Every %1$d min</string>
+    <string name="all_services">All Services</string>
+    <string name="widget_switch_hint">Toggle services to show on widget</string>
+    <string name="widget_no_switch_hint">At least one service must be enabled</string>
+    <string name="weather_qweather_key">QWeather API Key</string>
+    <string name="weather_qweather_key_hint">Enter your QWeather API key</string>
+    <string name="weather_city">%1$s</string>
 </resources>

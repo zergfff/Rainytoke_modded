@@ -10,11 +10,11 @@ plugins {
 
 android {
     namespace = "com.rainy.token"
-    compileSdk = 35
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "com.rainy.token"
-        minSdk = 31
+        minSdk = 35
         targetSdk = 35
         versionCode = 12
         versionName = "1.6.2"
@@ -216,6 +216,9 @@ dependencies {
     // DataStore
     implementation(libs.androidx.datastore.preferences)
 
+    // WorkManager
+    implementation(libs.androidx.work.runtime.ktx)
+
     // WebKit
     implementation(libs.androidx.webkit)
 
@@ -223,6 +226,8 @@ dependencies {
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
     implementation(libs.androidx.hilt.navigation.compose)
+    implementation(libs.hilt.work)
+    ksp(libs.hilt.work)
 
     // Room
     implementation(libs.room.runtime)

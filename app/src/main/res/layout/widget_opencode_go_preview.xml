@@ -13,6 +13,50 @@
         android:padding="12dp"
         android:gravity="center_vertical">
 
+    <!-- 时钟/日期/星期/天气预览行 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginBottom="4dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="12:00"
+            android:textColor="#FF85A2"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:layout_marginEnd="6dp" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Mon"
+            android:textColor="#8A7A82"
+            android:textSize="10sp"
+            android:layout_marginEnd="6dp" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="08/28"
+            android:textColor="#8A7A82"
+            android:textSize="11sp"
+            android:layout_marginEnd="6dp" />
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Beijing"
+            android:textColor="#8A7A82"
+            android:textSize="11sp"
+            android:gravity="end" />
+
+    </LinearLayout>
+
     <!-- 标题行 -->
     <LinearLayout
         android:layout_width="match_parent"

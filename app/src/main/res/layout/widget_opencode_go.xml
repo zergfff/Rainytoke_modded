@@ -13,9 +13,58 @@
         android:orientation="vertical"
         android:padding="8dp"
         android:gravity="center_vertical">
-    <!-- 注意：保持和原来一样的内部结构，只是套了一层 FrameLayout -->
 
-    <!-- 第一行 -->
+    <!-- 时钟/日期/星期/天气行 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginBottom="4dp">
+
+        <TextView
+            android:id="@+id/widget_time"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="12:00"
+            android:textColor="#FF85A2"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:layout_marginEnd="6dp" />
+
+        <TextView
+            android:id="@+id/widget_weekday"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Mon"
+            android:textColor="#8A7A82"
+            android:textSize="10sp"
+            android:layout_marginEnd="6dp" />
+
+        <TextView
+            android:id="@+id/widget_date"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="08/28"
+            android:textColor="#8A7A82"
+            android:textSize="11sp"
+            android:layout_marginEnd="6dp" />
+
+        <TextView
+            android:id="@+id/widget_weather"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text=""
+            android:textColor="#8A7A82"
+            android:textSize="11sp"
+            android:singleLine="true"
+            android:ellipsize="end"
+            android:gravity="end" />
+
+    </LinearLayout>
+
+    <!-- 第一行：品牌 + 切换 + 更新时间 + 刷新 -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -84,7 +133,7 @@
 
         </LinearLayout>
 
-    <!-- 第二行 -->
+    <!-- 第二行：Logo + 服务标题 -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"

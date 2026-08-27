@@ -63,6 +63,24 @@ class SecureStorage(
         }
     }
 
+    /** 读取 QWeather API Key。 */
+    suspend fun getQWeatherKey(): String? {
+        val ciphertext = dataStore.data
+            .map { it[stringPreferencesKey("qweather_api_key")] }
+            .first() ?: return null
+        val plaintext = runCatching { decrypt(ciphertext) }.getOrNull() ?: return null
+        return runCatching { plaintext }.getOrNull()
+    }
+
+    /** 写入 QWeather API Key（加密存储）。 */
+    suspend fun setQWeatherKey(key: String) {
+        val plaintext = key
+        val ciphertext = encrypt(plaintext)
+        dataStore.edit { prefs ->
+            prefs[stringPreferencesKey("qweather_api_key")] = ciphertext
+        }
+    }
+
     suspend fun clearAll() {
         dataStore.edit { it.clear() }
     }
