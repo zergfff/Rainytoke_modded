@@ -22,3 +22,8 @@ release.jks
 tmp_cc/
 goal.md
 /reference/
+
+.idea/
+local.properties
+emulator_screenshot.png
+rainytoken_hyperos3.patch
