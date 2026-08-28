@@ -1,4 +1,5 @@
 import java.io.File
+import java.util.zip.ZipFile
 
 plugins {
     alias(libs.plugins.android.application)
@@ -110,8 +111,12 @@ android {
 // 2. 本任务作为构建防护：optimizeReleaseResources 之后验证 optimized .ap_ 完整性，
 //    若缺失则复制 linked .ap_ 作为 fallback（功能正确，仅跳过 path shortening）
 // 3. packageRelease 依赖此任务，确保消费到完整资源
+//
+// 注意：该 AAPT2 缺陷并非 ARM64 独有。本机（os.arch=amd64）同样复现：
+// optimizeReleaseResources 产出 184 条目、0 个 drawable 的残缺 .ap_，
+// 而 linked .ap_ 完整（含 70 个 qw_ 天气图标）。因此在所有架构上启用防护。
 // ═══════════════════════════════════════════════════════
-if (System.getProperty("os.arch") == "aarch64") {
+if (true) {
     tasks.register("guardReleaseResources") {
         dependsOn("optimizeReleaseResources")
         doLast {
@@ -124,21 +129,38 @@ if (System.getProperty("os.arch") == "aarch64") {
             val optimizedAp = File(optimizedDir, "resources-release-optimize.ap_")
 
             if (optimizedAp.exists() && optimizedAp.length() > 0) {
-                // optimized .ap_ 存在，验证内容完整性
-                val zipList = providers.exec {
-                    commandLine("unzip", "-l", optimizedAp.absolutePath)
-                    isIgnoreExitValue = true
-                }.standardOutput.asText.get()
+                // optimized .ap_ 存在，验证内容完整性。
+                // 只检查 manifest/arsc/res 是否"存在"是不够的：本机实测 optimized .ap_
+                // 有 184 个条目且含 res/，但 res/drawable/* 全部缺失（0 个图标），
+                // 而 linked .ap_ 完整。因此改为对比两者的 res/ 条目数。
+                // 只比较条目数是不够的：实测 optimized 与 linked 同为 184 条目，
+                // 但 optimized 的 res/drawable/* 全部缺失（0 个 qw_ 图标）。
+                // 必须按名字集合比对，确保 res/ 内容一致。
+                fun zipNames(file: File): Set<String> = try {
+                    ZipFile(file).use { zip ->
+                        zip.entries().toList().mapTo(mutableSetOf()) { it.name }
+                    }
+                } catch (e: Exception) {
+                    emptySet()
+                }
 
-                val hasManifest = zipList.contains("AndroidManifest.xml")
-                val hasArsc = zipList.contains("resources.arsc")
-                val hasRes = zipList.contains("res/")
+                val optimizedNames = zipNames(optimizedAp)
+                val linkedNames = if (linkedAp.exists()) zipNames(linkedAp) else emptySet()
+                val optimizedRes = optimizedNames.filter { it.startsWith("res/") }.toSet()
+                val linkedRes = linkedNames.filter { it.startsWith("res/") }.toSet()
 
-                if (hasManifest && hasArsc && hasRes) {
-                    logger.lifecycle("GuardReleaseResources: optimized .ap_ OK (${optimizedAp.length()} bytes)")
+                if (optimizedRes.isNotEmpty() && optimizedRes.containsAll(linkedRes)) {
+                    logger.lifecycle(
+                        "GuardReleaseResources: optimized .ap_ OK " +
+                        "(${optimizedRes.size} res entries, ${optimizedAp.length()} bytes)"
+                    )
                     return@doLast
                 }
-                logger.warn("GuardReleaseResources: optimized .ap_ incomplete (manifest=$hasManifest arsc=$hasArsc res=$hasRes)")
+                logger.warn(
+                    "GuardReleaseResources: optimized .ap_ incomplete " +
+                    "(optimized res=${optimizedRes.size}, linked res=${linkedRes.size}, " +
+                    "missing=${linkedRes.subtract(optimizedRes).size})"
+                )
             } else {
                 logger.warn("GuardReleaseResources: optimized .ap_ missing or empty")
             }
@@ -151,15 +173,16 @@ if (System.getProperty("os.arch") == "aarch64") {
             optimizedDir.mkdirs()
             linkedAp.copyTo(optimizedAp, overwrite = true)
 
-            // Verify the copy
-            val verifyList = providers.exec {
-                commandLine("unzip", "-l", optimizedAp.absolutePath)
-                isIgnoreExitValue = true
-            }.standardOutput.asText.get()
-
-            val vManifest = verifyList.contains("AndroidManifest.xml")
-            val vArsc = verifyList.contains("resources.arsc")
-            val vRes = verifyList.contains("res/")
+            // Verify the copy（用 ZipFile 而非 unzip 命令，Windows 无 unzip）
+            var vManifest = false
+            var vArsc = false
+            var vRes = false
+            ZipFile(optimizedAp).use { zip ->
+                val names = zip.entries().toList().map { it.name }
+                vManifest = names.contains("AndroidManifest.xml")
+                vArsc = names.contains("resources.arsc")
+                vRes = names.any { it.startsWith("res/") }
+            }
 
             if (!vManifest || !vArsc || !vRes) {
                 throw GradleException("GuardReleaseResources: fallback copy verification failed (manifest=$vManifest arsc=$vArsc res=$vRes)")

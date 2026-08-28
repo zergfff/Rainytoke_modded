@@ -91,7 +91,7 @@ class OpenCodeGoWidgetProvider : AppWidgetProvider() {
 
         // 读取字体缩放（设置页 fontScale：0.85 / 1.0 / 1.15 / 1.3）
         val fontScale = runBlocking {
-            try { context.applicationContext.appSettingsStore.fontScale.first() } catch (_: Exception) { 1.0f }
+            try { context.applicationContext.appSettingsStore.widgetFontScale.first() } catch (_: Exception) { 1.0f }
         }.coerceIn(0.5f, 2.5f)
 
         for (widgetId in appWidgetIds) {
@@ -125,8 +125,8 @@ class OpenCodeGoWidgetProvider : AppWidgetProvider() {
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             ))
 
-            // 刷新按钮
-            views.setOnClickPendingIntent(R.id.widget_refresh, PendingIntent.getBroadcast(
+            // 刷新入口：刷新按钮已从布局移除，改为点击 logo 触发刷新
+            views.setOnClickPendingIntent(R.id.widget_logo, PendingIntent.getBroadcast(
                 context, 1, WidgetRefreshReceiver.createIntent(context),
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             ))
@@ -151,6 +151,9 @@ class OpenCodeGoWidgetProvider : AppWidgetProvider() {
                         localized.getString(R.string.widget_service_quota, selectedService.displayName)
                     )
                     views.setImageViewResource(R.id.widget_logo, widgetLogo(selectedService))
+                    // 恢复 logo 不透明度：showRefreshing() 会把它调暗，
+                    // RemoteViews 的 setInt 不会随 setImageViewResource 自动重置。
+                    views.setInt(R.id.widget_logo, "setImageAlpha", 255)
                     if (selectedService == ServiceType.OLLAMA || selectedService == ServiceType.COMMANDCODE_GO) {
                         views.setViewLayoutWidth(R.id.widget_logo, 14f, TypedValue.COMPLEX_UNIT_DIP)
                         views.setViewLayoutHeight(R.id.widget_logo, 14f, TypedValue.COMPLEX_UNIT_DIP)
@@ -162,13 +165,6 @@ class OpenCodeGoWidgetProvider : AppWidgetProvider() {
                     if (cached != null) {
                         selectedHasCachedData = true
                         populateServiceRows(views, localized, selectedService, cached.balance)
-
-                        val sdf = SimpleDateFormat("MM-dd HH:mm", Locale.getDefault())
-                        val timeText = sdf.format(Date(cached.fetchedAt))
-                        views.setTextViewText(
-                            R.id.widget_updated,
-                            localized.getString(R.string.widget_updated_at, timeText)
-                        )
                     } else {
                         setEmptyState(views, localized, selectedService)
                         views.setTextViewText(
@@ -259,13 +255,13 @@ class OpenCodeGoWidgetProvider : AppWidgetProvider() {
 private fun applyFontScale(views: RemoteViews, context: Context, scale: Float) {
     // (viewId, XML 里的基准 sp)
     val targets = listOf(
-        R.id.widget_time to 50f,
-        R.id.widget_weekday to 20f,
-        R.id.widget_date to 20f,
-        R.id.widget_weather to 20f,
+        // 时间 42sp，星期/日期/天气 26sp：差距拉大到 ~60%，
+        // 之前 35/30 仅差 17%，小组件尺寸下肉眼几乎看不出层级。
+        R.id.widget_time to 42f,
+        R.id.widget_weekday to 26f,
+        R.id.widget_date to 26f,
+        R.id.widget_weather to 26f,
         R.id.widget_service_title to 14f,
-        R.id.widget_updated to 10f,
-        R.id.widget_refresh to 20f,
         R.id.widget_ds_label to 14f,
         R.id.widget_ds_amount to 15f,
         R.id.row1_label to 14f,
@@ -310,6 +306,19 @@ private fun populateServiceRows(
         }
         views.setViewVisibility(R.id.widget_ds_row, android.view.View.GONE)
         val extras = balance.extras
+
+        // 标题无条件设置：showRefreshing() 会把标题临时改成"刷新中…"，
+        // 若只在个别分支里重设，其他服务刷新结束后标题就永久残留"刷新中…"。
+        val titlePlan = extras["plan"].orEmpty()
+        views.setTextViewText(
+            R.id.widget_service_title,
+            if (titlePlan.isNotEmpty()) {
+                context.getString(R.string.widget_quota_with_plan, service.displayName, titlePlan)
+            } else {
+                context.getString(R.string.widget_service_quota, service.displayName)
+            }
+        )
+
         when (service) {
             ServiceType.OPENCODE_GO -> {
                 setRowLabel(views, context.getString(R.string.window_5h_short), context.getString(R.string.window_weekly), context.getString(R.string.window_monthly))
@@ -459,7 +468,12 @@ private fun populateServiceRows(
     }
 
     private fun setEmptyState(views: RemoteViews, context: Context, service: ServiceType = ServiceType.OPENCODE_GO) {
-        views.setTextViewText(R.id.widget_updated, context.getString(R.string.widget_no_data))
+        // 空状态同样要恢复服务标题：否则 showRefreshing() 留下的"刷新中…"
+        // 在没有任何缓存数据的服务上会一直显示。
+        views.setTextViewText(
+            R.id.widget_service_title,
+            context.getString(R.string.widget_service_quota, service.displayName)
+        )
         // 空状态也设置行标签（跟随 app 语言，中文显示 本周/本月）
         setRowLabel(
             views,
@@ -518,14 +532,46 @@ private fun populateServiceRows(
                 .apply()
         }
 
+        /**
+         * 小组件当前要显示的服务。
+         *
+         * 以设置里勾选的服务集合（DataStore widgetSelectedServices）为准：
+         * 只在该集合内轮转，取消勾选的服务不会再出现在小组件里。
+         * 集合为空时回退到 OpenCode Go，避免出现无服务可显示的空白。
+         */
         fun currentDisplayService(context: Context): ServiceType {
-            val key = autoRefreshPrefs(context).getString(KEY_DISPLAY_SERVICE, ServiceType.OPENCODE_GO.storageKey)
-            return DISPLAY_SERVICES.firstOrNull { it.storageKey == key } ?: ServiceType.OPENCODE_GO
+            val selected = runBlocking {
+                try {
+                    context.applicationContext.appSettingsStore.widgetSelectedServices.first()
+                } catch (_: Exception) {
+                    null
+                }
+            }.orEmpty()
+
+            val ordered = DISPLAY_SERVICES.filter { it.storageKey in selected }
+            val candidates = ordered.ifEmpty { listOf(ServiceType.OPENCODE_GO) }
+
+            val key = autoRefreshPrefs(context).getString(KEY_DISPLAY_SERVICE, null)
+            // 当前项若已被取消勾选，则切到集合中的第一个
+            return candidates.firstOrNull { it.storageKey == key }
+                ?: candidates.first()
         }
 
         private fun switchDisplayService(context: Context) {
+            val selected = runBlocking {
+                try {
+                    context.applicationContext.appSettingsStore.widgetSelectedServices.first()
+                } catch (_: Exception) {
+                    null
+                }
+            }.orEmpty()
+
+            val ordered = DISPLAY_SERVICES.filter { it.storageKey in selected }
+            val candidates = ordered.ifEmpty { listOf(ServiceType.OPENCODE_GO) }
+
             val current = currentDisplayService(context)
-            val next = DISPLAY_SERVICES[(DISPLAY_SERVICES.indexOf(current).coerceAtLeast(0) + 1) % DISPLAY_SERVICES.size]
+            val idx = candidates.indexOf(current).coerceAtLeast(0)
+            val next = candidates[(idx + 1) % candidates.size]
             autoRefreshPrefs(context).edit().putString(KEY_DISPLAY_SERVICE, next.storageKey).apply()
         }
 
@@ -559,14 +605,27 @@ private fun populateServiceRows(
             }
         }
 
+        /**
+         * 刷新中的视觉反馈。
+         *
+         * 不再改写服务标题：标题是服务的唯一标识（如 "OpenCode Go 配额"），
+         * 而 partiallyUpdateAppWidget 只提交增量，刷新结束若走空状态分支
+         * （无缓存/未配置）就不会重设标题，导致"刷新中…"永久残留。
+         *
+         * 改为让 logo 半透明，刷新结束后 updateAppWidget 会自然恢复，
+         * 不会留下任何需要回滚的状态。
+         *
+         * 注意：这里只改透明度，绝不 setImageViewResource——
+         * partiallyUpdateAppWidget 是增量提交，一旦写死某个 drawable，
+         * 所有服务（CommandCode/Codex/DeepSeek…）的 logo 都会被顶成那一个。
+         */
         fun showRefreshing(context: Context) {
-            val localized = LocaleManager.wrapContext(context)
             val appWidgetManager = AppWidgetManager.getInstance(context)
             val component = ComponentName(context, OpenCodeGoWidgetProvider::class.java)
             val ids = appWidgetManager.getAppWidgetIds(component)
             ids.forEach { id ->
                 val views = RemoteViews(context.packageName, R.layout.widget_opencode_go)
-                views.setTextViewText(R.id.widget_updated, localized.getString(R.string.widget_refreshing))
+                views.setInt(R.id.widget_logo, "setImageAlpha", 100)
                 appWidgetManager.partiallyUpdateAppWidget(id, views)
             }
         }

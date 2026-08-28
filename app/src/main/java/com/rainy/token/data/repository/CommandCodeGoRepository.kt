@@ -125,14 +125,29 @@ class CommandCodeGoRepository(
      *  2. `cookies` 列表里名为 `*session_token*` 的项（WebView 登录后自动抓取）
      *  3. `token` 字段（兼容早期把 session_token 存在这里的写法）
      */
+    /**
+     * 浏览器 DevTools 复制的 cookie 值常带 URL 编码（如末尾 = 变成 %3D）。
+     * OkHttp 会原样发送编码后的值，服务端解不出 token 就返回 401。
+     * 这里做一次解码，确保拿到原始 token。
+     */
+    private fun decodeToken(raw: String): String {
+        val trimmed = raw.trim()
+        if (!trimmed.contains('%')) return trimmed
+        return try {
+            java.net.URLDecoder.decode(trimmed, "UTF-8")
+        } catch (_: Exception) {
+            trimmed
+        }
+    }
+
     private fun resolveSessionCookie(credential: Credential.SessionCredential): String? {
-        credential.authCookie?.takeIf { it.isNotBlank() }?.let { return it.trim() }
+        credential.authCookie?.takeIf { it.isNotBlank() }?.let { return decodeToken(it) }
 
         credential.cookies.firstOrNull {
             it.name.contains("session_token", ignoreCase = true) && it.value.isNotBlank()
-        }?.let { return it.value.trim() }
+        }?.let { return decodeToken(it.value) }
 
-        return credential.token?.takeIf { it.isNotBlank() }?.trim()
+        return credential.token?.takeIf { it.isNotBlank() }?.let { decodeToken(it) }
     }
 
     private fun fetchCredits(credential: Credential.SessionCredential): CreditsPayload {
@@ -150,7 +165,16 @@ class CommandCodeGoRepository(
 
         val response = okHttpClient.newCall(request).execute()
         if (!response.isSuccessful) {
-            throw IOException("HTTP ${response.code}: ${response.body?.string().orEmpty()}")
+            val detail = response.body?.string().orEmpty()
+            // 401 = 会话 Cookie 失效/过期，给出可操作的提示，而不是笼统的 HTTP 401
+            if (response.code == 401 || response.code == 403) {
+                throw IOException(
+                    "会话已失效 (HTTP ${response.code})。CommandCode 已改用浏览器会话鉴权，" +
+                    "请重新登录 commandcode.ai 并在 DevTools → Application → Cookies 复制 " +
+                    "__Secure-commandcode_prod_.session_token 的值"
+                )
+            }
+            throw IOException("HTTP ${response.code}: $detail")
         }
 
         val body = response.body?.string() ?: throw IOException("空响应体")

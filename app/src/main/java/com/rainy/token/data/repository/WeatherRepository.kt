@@ -61,9 +61,20 @@ class WeatherRepository @Inject constructor(
                     it.latitude to it.longitude
                 } ?: return@withContext null)
 
-                val host = apiHost.trim().ifBlank { FALLBACK_HOST }
+                // 公共域名（devapi.qweather.com 等）自 2026 年起返回 403 Invalid Host，
+                // 必须使用控制台里的专属 API Host。未配置时直接放弃，并在日志里给出明确原因，
+                // 避免静默失败让用户以为天气功能坏了。
+                val host = apiHost.trim()
                     .removePrefix("https://").removePrefix("http://")
                     .trimEnd('/')
+                if (host.isBlank()) {
+                    android.util.Log.w(
+                        TAG,
+                        "天气未配置 API Host：请在设置页填写控制台中的 API Host" +
+                        "（形如 abc123.def.qweatherapi.com）。公共域名已停用。"
+                    )
+                    return@withContext null
+                }
 
                 // 2. Geo lookup（v2 city/lookup，按经纬度反查城市）
                 val geoUrl = "https://$host/geo/v2/city/lookup" +
@@ -148,8 +159,7 @@ class WeatherRepository @Inject constructor(
     }
 
     companion object {
-        /** 旧共享域名兜底（官方公告 2026 起逐步停用，仅作兼容） */
-        private const val FALLBACK_HOST = "devapi.qweather.com"
+        private const val TAG = "WeatherRepository"
 
         /**
          * 按和风天气图标码返回本地 vector drawable 资源名。

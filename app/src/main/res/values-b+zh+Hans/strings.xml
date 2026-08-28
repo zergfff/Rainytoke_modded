@@ -581,4 +581,10 @@
     <string name="weather_qweather_key_hint">填写和风天气 API Key</string>
     <string name="weather_key_hint">和风天气 QWeather API Key（加密存储）</string>
     <string name="weather_location_hint">天气使用系统粗定位（城市级），可在系统设置中授权。</string>
+    <string name="font_scale_range_hint">0.1x – 1.0x，按 0.1 递进</string>
+    <string name="field_session_token">Session Token（必填）</string>
+    <string name="placeholder_session_token">粘贴 __Secure-commandcode_prod_.session_token 的值</string>
+    <string name="title_app_font_size">APP 界面字体大小</string>
+    <string name="title_widget_font_size">小组件字体大小</string>
+    <string name="weather_host_required">必须填写 API Host——公共域名已于 2026 年停用。请在和风天气控制台「设置」中查看你的专属 Host。</string>
 </resources>

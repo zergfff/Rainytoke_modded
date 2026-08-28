@@ -8,6 +8,7 @@ import com.rainy.token.data.local.appSettingsStore
 import com.rainy.token.data.local.SecureStorage
 import com.rainy.token.data.repository.CredentialRepository
 import com.rainy.token.domain.model.CredentialStatus
+import com.rainy.token.ui.widget.OpenCodeGoWidgetProvider
 import com.rainy.token.ui.widget.WidgetPeriodicWorker
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -22,7 +23,8 @@ import javax.inject.Inject
 
 data class SettingsUiStateData(
     val themeKey: String = "strawberry",
-    val fontScale: Float = 1.0f,
+    val appFontScale: Float = 1.0f,
+    val widgetFontScale: Float = 1.0f,
     val widgetRefreshIntervalMin: Int = 15,
     val widgetSelectedServices: Set<String> = setOf("opencode_go", "commandcode_go", "codex", "ollama"),
     val weatherEnabled: Boolean = false,
@@ -45,7 +47,8 @@ class SettingsViewModel @Inject constructor(
 
     val settingsState: StateFlow<SettingsUiStateData> = kotlinx.coroutines.flow.combine(
         settings.themeKey,
-        settings.fontScale,
+        settings.appFontScale,
+        settings.widgetFontScale,
         settings.widgetRefreshIntervalMin,
         settings.widgetSelectedServices,
         settings.weatherEnabled,
@@ -54,12 +57,13 @@ class SettingsViewModel @Inject constructor(
     ) { values: Array<Any> ->
         SettingsUiStateData(
             themeKey = values[0] as String,
-            fontScale = values[1] as Float,
-            widgetRefreshIntervalMin = values[2] as Int,
-            widgetSelectedServices = @Suppress("UNCHECKED_CAST") values[3] as Set<String>,
-            weatherEnabled = values[4] as Boolean,
-            qweatherKey = values[5] as String,
-            qweatherHost = values[6] as String
+            appFontScale = values[1] as Float,
+            widgetFontScale = values[2] as Float,
+            widgetRefreshIntervalMin = values[3] as Int,
+            widgetSelectedServices = @Suppress("UNCHECKED_CAST") values[4] as Set<String>,
+            weatherEnabled = values[5] as Boolean,
+            qweatherKey = values[6] as String,
+            qweatherHost = values[7] as String
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), SettingsUiStateData())
 
@@ -79,8 +83,31 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch { settings.setThemeKey(key) }
     }
 
-    fun setFontScale(v: Float) {
-        viewModelScope.launch { settings.setFontScale(v) }
+    fun setAppFontScale(v: Float) {
+        viewModelScope.launch { settings.setAppFontScale(v) }
+    }
+
+    /** 小组件字体改变后需要立即重绘，否则要等下一个刷新周期才生效 */
+    fun setWidgetFontScale(v: Float) {
+        viewModelScope.launch {
+            settings.setWidgetFontScale(v)
+            refreshWidgets()
+        }
+    }
+
+    /** 触发小组件重绘（勾选服务、字体等变更后立即生效） */
+    private fun refreshWidgets() {
+        try {
+            val ids = android.appwidget.AppWidgetManager.getInstance(context)
+                .getAppWidgetIds(android.content.ComponentName(context, OpenCodeGoWidgetProvider::class.java))
+            if (ids.isNotEmpty()) {
+                OpenCodeGoWidgetProvider().onUpdate(
+                    context,
+                    android.appwidget.AppWidgetManager.getInstance(context),
+                    ids
+                )
+            }
+        } catch (_: Exception) { }
     }
 
     fun setWidgetRefreshInterval(min: Int) {
@@ -91,19 +118,39 @@ class SettingsViewModel @Inject constructor(
     }
 
     fun setWidgetSelectedServices(set: Set<String>) {
-        viewModelScope.launch { settings.setWidgetSelectedServices(set) }
+        viewModelScope.launch {
+            settings.setWidgetSelectedServices(set)
+            // 立即重绘小组件，否则取消勾选的服务要等下个刷新周期才消失
+            refreshWidgets()
+        }
     }
 
+    /**
+     * 天气开关：由 API Key 是否填写自动推导，不再由用户手动切换。
+     * 写入后立即触发一次刷新，让天气尽快出现。
+     */
     fun setWeatherEnabled(v: Boolean) {
-        viewModelScope.launch { settings.setWeatherEnabled(v) }
+        viewModelScope.launch {
+            settings.setWeatherEnabled(v)
+            if (v) WidgetPeriodicWorker.requestImmediate(application)
+        }
     }
 
     fun setQWeatherKey(key: String) {
-        viewModelScope.launch { secureStorage.setQWeatherKey(key) }
+        viewModelScope.launch {
+            secureStorage.setQWeatherKey(key)
+            // 填了 Key 就自动开启天气，无需额外开关
+            val enabled = key.isNotBlank()
+            settings.setWeatherEnabled(enabled)
+            if (enabled) WidgetPeriodicWorker.requestImmediate(application)
+        }
     }
 
     fun setQWeatherHost(host: String) {
-        viewModelScope.launch { settings.setQweatherHost(host) }
+        viewModelScope.launch {
+            settings.setQweatherHost(host)
+            if (host.isNotBlank()) WidgetPeriodicWorker.requestImmediate(application)
+        }
     }
 }
 

@@ -55,7 +55,7 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             val themeKey by appSettingsStore.themeKey.collectAsState(initial = "strawberry")
-            val fontScale by appSettingsStore.fontScale.collectAsState(initial = 1.0f)
+            val fontScale by appSettingsStore.appFontScale.collectAsState(initial = 1.0f)
             val weatherEnabled by appSettingsStore.weatherEnabled.collectAsState(initial = false)
 
             // 开启天气功能且未授权定位时，请求粗略定位权限

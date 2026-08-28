@@ -27,12 +27,16 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
@@ -161,8 +165,17 @@ fun SettingsScreen(
                 // 字体缩放
                 item {
                     FontScaleCard(
-                        currentScale = settingsState.fontScale,
-                        onScaleChanged = { viewModel.setFontScale(it) }
+                        title = stringResource(R.string.title_app_font_size),
+                        currentScale = settingsState.appFontScale,
+                        onScaleChanged = { viewModel.setAppFontScale(it) }
+                    )
+                }
+
+                item {
+                    FontScaleCard(
+                        title = stringResource(R.string.title_widget_font_size),
+                        currentScale = settingsState.widgetFontScale,
+                        onScaleChanged = { viewModel.setWidgetFontScale(it) }
                     )
                 }
 
@@ -189,10 +202,8 @@ fun SettingsScreen(
                 // 天气配置
                 item {
                     WeatherConfigCard(
-                        weatherEnabled = settingsState.weatherEnabled,
                         qweatherKey = settingsState.qweatherKey,
                         qweatherHost = settingsState.qweatherHost,
-                        onWeatherEnabledChanged = { viewModel.setWeatherEnabled(it) },
                         onQWeatherKeyChanged = { viewModel.setQWeatherKey(it) },
                         onQWeatherHostChanged = { viewModel.setQWeatherHost(it) }
                     )
@@ -219,13 +230,7 @@ fun SettingsScreen(
                 item {
                     LanguageCard(onClick = { showLanguageDialog = true })
                 }
-                item {
-                    DebugLogCard(onClick = { onOpenDebugLog() })
-                }
-                item {
-                    Spacer(modifier = Modifier.padding(top = 8.dp))
-                    AboutCard()
-                }
+                // 调试日志与"关于"卡片已移除（日志页无实际输出，关于页含无关条款）
             }
         }
     }
@@ -280,17 +285,21 @@ private fun ThemeCard(
 }
 
 // ─── 字体缩放卡片 ───
+
+/** 0.1 ~ 1.0，步进 0.1，共 10 档 */
+private val FONT_SCALES = (1..10).map { it / 10f }
+
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun FontScaleCard(
+    title: String,
     currentScale: Float,
     onScaleChanged: (Float) -> Unit
 ) {
-    val label = when {
-        currentScale <= 0.85f -> stringResource(R.string.font_small)
-        currentScale >= 1.3f -> stringResource(R.string.font_extra_large)
-        currentScale >= 1.15f -> stringResource(R.string.font_large)
-        else -> stringResource(R.string.font_normal)
-    }
+    // 当前值吸附到最近的档位（历史值可能落在档位之外）
+    val snapped = FONT_SCALES.minByOrNull { kotlin.math.abs(it - currentScale) } ?: 1.0f
+    var expanded by remember { mutableStateOf(false) }
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(20.dp),
@@ -299,27 +308,49 @@ private fun FontScaleCard(
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text(
-                text = stringResource(R.string.title_font_size),
+                text = title,
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold
             )
             Text(
-                text = label,
+                text = stringResource(R.string.font_scale_range_hint),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 2.dp)
             )
-            Slider(
-                value = currentScale,
-                onValueChange = onScaleChanged,
-                valueRange = 0.85f..1.3f,
-                steps = 2,
-                colors = SliderDefaults.colors(
-                    thumbColor = MaterialTheme.colorScheme.primary,
-                    activeTrackColor = MaterialTheme.colorScheme.primary
-                ),
-                modifier = Modifier.padding(top = 8.dp)
-            )
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // 10 档下拉选择，比滑块更容易精确选中
+            ExposedDropdownMenuBox(
+                expanded = expanded,
+                onExpandedChange = { expanded = it }
+            ) {
+                OutlinedTextField(
+                    value = "%.1fx".format(snapped),
+                    onValueChange = {},
+                    readOnly = true,
+                    label = { Text(title) },
+                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .menuAnchor(),
+                    colors = ExposedDropdownMenuDefaults.outlinedTextFieldColors()
+                )
+                ExposedDropdownMenu(
+                    expanded = expanded,
+                    onDismissRequest = { expanded = false }
+                ) {
+                    FONT_SCALES.forEach { scale ->
+                        DropdownMenuItem(
+                            text = { Text("%.1fx".format(scale)) },
+                            onClick = {
+                                onScaleChanged(scale)
+                                expanded = false
+                            }
+                        )
+                    }
+                }
+            }
         }
     }
 }
@@ -401,7 +432,7 @@ private fun RefreshIntervalCard(
     intervalMin: Int,
     onIntervalChanged: (Int) -> Unit
 ) {
-    val options = listOf(15, 30, 45, 60)
+    val options = listOf(15, 30, 45, 60, 120)
     val label = stringResource(R.string.refresh_interval, intervalMin)
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -442,10 +473,8 @@ private fun RefreshIntervalCard(
 // ─── 天气配置卡片 ───
 @Composable
 private fun WeatherConfigCard(
-    weatherEnabled: Boolean,
     qweatherKey: String,
     qweatherHost: String,
-    onWeatherEnabledChanged: (Boolean) -> Unit,
     onQWeatherKeyChanged: (String) -> Unit,
     onQWeatherHostChanged: (String) -> Unit
 ) {
@@ -466,15 +495,18 @@ private fun WeatherConfigCard(
                     fontWeight = FontWeight.SemiBold,
                     modifier = Modifier.weight(1f)
                 )
-                Switch(
-                    checked = weatherEnabled,
-                    onCheckedChange = onWeatherEnabledChanged,
-                    colors = SwitchDefaults.colors(
-                        checkedThumbColor = MaterialTheme.colorScheme.primary
-                    )
-                )
             }
-            if (weatherEnabled) {
+            // 凭据输入区始终可见：用户必须能先填 Key/Host 再启用天气，
+            // 否则会出现"开关打开了但没有凭据"的死循环。
+            run {
+                // 公共域名已停用，未填 Host 时天气必然失败——提前告知，避免静默失败
+                if (qweatherHost.isBlank()) {
+                    Text(
+                        text = stringResource(R.string.weather_host_required),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
                     text = stringResource(R.string.weather_qweather_key),
@@ -651,69 +683,6 @@ private fun CredentialStatusCard(status: CredentialStatus, onClick: () -> Unit) 
                 )
             }
             StatusChip(style = stateToChip(status.state))
-        }
-    }
-}
-
-// ─── 关于卡片 ───
-@Composable
-private fun AboutCard() {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
-    ) {
-        Column(modifier = Modifier.padding(20.dp)) {
-            Text(
-                text = stringResource(R.string.title_about),
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold
-            )
-            Spacer(modifier = Modifier.padding(top = 8.dp))
-            Text(
-                text = stringResource(R.string.about_description),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-    }
-}
-
-// ─── 调试日志卡片 ───
-@Composable
-private fun DebugLogCard(onClick: () -> Unit) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onClick() },
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
-    ) {
-        Row(
-            modifier = Modifier.padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = "🔍",
-                style = MaterialTheme.typography.titleLarge
-            )
-            Spacer(modifier = Modifier.width(12.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = stringResource(R.string.title_debug_log),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Text(
-                    text = stringResource(R.string.debug_log_desc),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 2.dp)
-                )
-            }
         }
     }
 }

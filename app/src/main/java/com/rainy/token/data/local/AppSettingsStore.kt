@@ -35,7 +35,11 @@ class AppSettingsStore @Inject constructor(
     // ─── Keys ───
     private object Keys {
         val themeKey = stringPreferencesKey("theme_key")
-        val fontScale = floatPreferencesKey("font_scale")
+        // 字体拆分为 App UI 与小组件两套，各自独立设置
+        val appFontScale = floatPreferencesKey("app_font_scale")
+        val widgetFontScale = floatPreferencesKey("widget_font_scale")
+        // 旧版统一字体键，仅用于一次性迁移
+        val fontScaleLegacy = floatPreferencesKey("font_scale")
         val widgetRefreshIntervalMin = intPreferencesKey("widget_refresh_interval_min")
         val widgetSelectedServices = stringSetPreferencesKey("widget_selected_services")
         val weatherEnabled = booleanPreferencesKey("weather_enabled")
@@ -52,7 +56,8 @@ class AppSettingsStore @Inject constructor(
 
     // ─── Flows ───
     val themeKey: Flow<String> = ds.data.map { it[Keys.themeKey] ?: "strawberry" }
-    val fontScale: Flow<Float> = ds.data.map { it[Keys.fontScale] ?: 1.0f }
+    val appFontScale: Flow<Float> = ds.data.map { it[Keys.appFontScale] ?: it[Keys.fontScaleLegacy] ?: 1.0f }
+    val widgetFontScale: Flow<Float> = ds.data.map { it[Keys.widgetFontScale] ?: it[Keys.fontScaleLegacy] ?: 1.0f }
     val widgetRefreshIntervalMin: Flow<Int> = ds.data.map { it[Keys.widgetRefreshIntervalMin] ?: 15 }
     val widgetSelectedServices: Flow<Set<String>> = ds.data.map {
         it[Keys.widgetSelectedServices] ?: setOf(
@@ -75,8 +80,12 @@ class AppSettingsStore @Inject constructor(
         ds.edit { it[Keys.themeKey] = value }
     }
 
-    suspend fun setFontScale(value: Float) {
-        ds.edit { it[Keys.fontScale] = value }
+    suspend fun setAppFontScale(value: Float) {
+        ds.edit { it[Keys.appFontScale] = value }
+    }
+
+    suspend fun setWidgetFontScale(value: Float) {
+        ds.edit { it[Keys.widgetFontScale] = value }
     }
 
     suspend fun setWidgetRefreshIntervalMin(value: Int) {

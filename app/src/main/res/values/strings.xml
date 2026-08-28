@@ -585,4 +585,22 @@
     <string name="weather_qweather_host_hint">abc123.def.qweatherapi.com</string>
     <string name="weather_qweather_host_note">Find your API Host in QWeather Console → Settings. Leave blank to use the legacy shared domain.</string>
     <string name="weather_city">%1$s</string>
+    <string name="weather_enable">Enable live weather</string>
+    <string name="weather_on">On</string>
+    <string name="weather_off">Off</string>
+    <string name="weather_need_key">QWeather key not configured</string>
+    <string name="weather_key_hint">QWeather API key (stored encrypted)</string>
+    <string name="weather_location_hint">Weather uses coarse (city-level) location. Grant it in system settings.</string>
+    <string name="refresh_15">15 minutes</string>
+    <string name="refresh_30">30 minutes</string>
+    <string name="refresh_60">60 minutes</string>
+    <string name="refresh_120">120 minutes</string>
+    <string name="font_standard">Standard (1.0x)</string>
+    <string name="font_xlarge">Extra large (1.3x)</string>
+    <string name="font_scale_range_hint">0.1x – 1.0x, in 0.1 steps</string>
+    <string name="field_session_token">Session Token (required)</string>
+    <string name="placeholder_session_token">Paste __Secure-commandcode_prod_.session_token</string>
+    <string name="title_app_font_size">App UI font size</string>
+    <string name="title_widget_font_size">Widget font size</string>
+    <string name="weather_host_required">API Host is required — public domains were retired in 2026. Find yours in QWeather Console → Settings.</string>
 </resources>

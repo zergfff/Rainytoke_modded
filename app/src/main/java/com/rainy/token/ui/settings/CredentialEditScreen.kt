@@ -523,11 +523,14 @@ private fun CommandCodeGoForm(
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.outline
     )
+    // 官方已废弃 API Key，billing 端点只接受浏览器会话 Cookie。
+    // 标签从 "API Key" 改为 "Session Token"，避免用户把 session token
+    // 粘到错误的字段导致 401。
     OutlinedTextField(
         value = apiKey,
         onValueChange = onApiKeyChange,
-        label = { Text(stringResource(R.string.field_api_key)) },
-        placeholder = { Text(stringResource(R.string.placeholder_api_key_from_settings)) },
+        label = { Text(stringResource(R.string.field_session_token)) },
+        placeholder = { Text(stringResource(R.string.placeholder_session_token)) },
         singleLine = true,
         visualTransformation = PasswordVisualTransformation(),
         keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Password),
