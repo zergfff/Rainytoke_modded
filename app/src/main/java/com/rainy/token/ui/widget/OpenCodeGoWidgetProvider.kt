@@ -238,15 +238,15 @@ private fun applyFontScale(views: RemoteViews, context: Context, scale: Float) {
         R.id.widget_refresh to 20f,
         R.id.widget_ds_label to 11f,
         R.id.widget_ds_amount to 11f,
-        R.id.row1_label to 11f,
-        R.id.row1_pct to 12f,
-        R.id.row1_reset to 10f,
-        R.id.row2_label to 11f,
-        R.id.row2_pct to 12f,
-        R.id.row2_reset to 10f,
-        R.id.row3_label to 11f,
-        R.id.row3_pct to 12f,
-        R.id.row3_reset to 10f
+        R.id.row1_label to 12f,
+        R.id.row1_pct to 13f,
+        R.id.row1_reset to 11f,
+        R.id.row2_label to 12f,
+        R.id.row2_pct to 13f,
+        R.id.row2_reset to 11f,
+        R.id.row3_label to 12f,
+        R.id.row3_pct to 13f,
+        R.id.row3_reset to 11f
     )
     for ((id, baseSp) in targets) {
         views.setTextViewTextSize(id, TypedValue.COMPLEX_UNIT_SP, baseSp * scale)

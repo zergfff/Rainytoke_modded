@@ -140,12 +140,12 @@
             android:minWidth="30dp"
             android:layout_marginEnd="4dp" android:layout_height="wrap_content"
             android:maxLines="1" android:ellipsize="end"
-            android:text="5h" android:textColor="#8A7A82" android:textSize="11sp" />
+            android:text="5h" android:textColor="#8A7A82" android:textSize="12sp" />
 
         <TextView android:id="@+id/row1_pct"
             android:layout_width="wrap_content"
             android:minWidth="26dp" android:layout_height="wrap_content"
-            android:text="--" android:textColor="#3D2C35" android:textSize="12sp"
+            android:text="--" android:textColor="#3D2C35" android:textSize="13sp"
             android:textStyle="bold" android:gravity="end" />
 
         <ProgressBar android:id="@+id/row1_bar"
@@ -159,7 +159,7 @@
             android:layout_width="wrap_content"
             android:minWidth="34dp"
             android:layout_marginStart="4dp" android:layout_height="wrap_content"
-            android:text="--" android:textColor="#B0A0A7" android:textSize="10sp" />
+            android:text="--" android:textColor="#B0A0A7" android:textSize="11sp" />
     </LinearLayout>
 
     <!-- 本周 -->
@@ -175,12 +175,12 @@
             android:minWidth="30dp"
             android:layout_marginEnd="4dp" android:layout_height="wrap_content"
             android:maxLines="1" android:ellipsize="end"
-            android:text="@string/window_weekly" android:textColor="#8A7A82" android:textSize="11sp" />
+            android:text="@string/window_weekly" android:textColor="#8A7A82" android:textSize="12sp" />
 
         <TextView android:id="@+id/row2_pct"
             android:layout_width="wrap_content"
             android:minWidth="26dp" android:layout_height="wrap_content"
-            android:text="--" android:textColor="#3D2C35" android:textSize="12sp"
+            android:text="--" android:textColor="#3D2C35" android:textSize="13sp"
             android:textStyle="bold" android:gravity="end" />
 
         <ProgressBar android:id="@+id/row2_bar"
@@ -194,7 +194,7 @@
             android:layout_width="wrap_content"
             android:minWidth="34dp"
             android:layout_marginStart="4dp" android:layout_height="wrap_content"
-            android:text="--" android:textColor="#B0A0A7" android:textSize="10sp" />
+            android:text="--" android:textColor="#B0A0A7" android:textSize="11sp" />
     </LinearLayout>
 
     <!-- 本月 -->
@@ -210,12 +210,12 @@
             android:minWidth="30dp"
             android:layout_marginEnd="4dp" android:layout_height="wrap_content"
             android:maxLines="1" android:ellipsize="end"
-            android:text="@string/window_monthly" android:textColor="#8A7A82" android:textSize="11sp" />
+            android:text="@string/window_monthly" android:textColor="#8A7A82" android:textSize="12sp" />
 
         <TextView android:id="@+id/row3_pct"
             android:layout_width="wrap_content"
             android:minWidth="26dp" android:layout_height="wrap_content"
-            android:text="--" android:textColor="#3D2C35" android:textSize="12sp"
+            android:text="--" android:textColor="#3D2C35" android:textSize="13sp"
             android:textStyle="bold" android:gravity="end" />
 
         <ProgressBar android:id="@+id/row3_bar"
@@ -229,7 +229,7 @@
             android:layout_width="wrap_content"
             android:minWidth="34dp"
             android:layout_marginStart="4dp" android:layout_height="wrap_content"
-            android:text="--" android:textColor="#B0A0A7" android:textSize="10sp" />
+            android:text="--" android:textColor="#B0A0A7" android:textSize="11sp" />
     </LinearLayout>
 
     <!-- DeepSeek 余额 -->
