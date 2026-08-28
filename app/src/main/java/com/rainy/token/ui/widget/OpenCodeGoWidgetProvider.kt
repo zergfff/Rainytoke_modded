@@ -166,7 +166,7 @@ class OpenCodeGoWidgetProvider : AppWidgetProvider() {
                         localized.getString(R.string.widget_service_quota, selectedService.displayName)
                     )
                     views.setImageViewResource(R.id.widget_logo, widgetLogo(selectedService))
-                    if (selectedService == ServiceType.OLLAMA) {
+                    if (selectedService == ServiceType.OLLAMA || selectedService == ServiceType.COMMANDCODE_GO) {
                         views.setViewLayoutWidth(R.id.widget_logo, 14f, TypedValue.COMPLEX_UNIT_DIP)
                         views.setViewLayoutHeight(R.id.widget_logo, 14f, TypedValue.COMPLEX_UNIT_DIP)
                     } else {
@@ -446,7 +446,8 @@ class OpenCodeGoWidgetProvider : AppWidgetProvider() {
         }
 
         private fun widgetLogo(service: ServiceType): Int = when (service) {
-            ServiceType.OPENCODE_GO, ServiceType.COMMANDCODE_GO -> R.drawable.ic_opencode_go_logo_widget
+            ServiceType.OPENCODE_GO -> R.drawable.ic_opencode_go_logo_widget
+            ServiceType.COMMANDCODE_GO -> R.drawable.ic_commandcode_logo_widget
             ServiceType.CODEX -> R.drawable.ic_codex_logo_widget
             ServiceType.DEEPSEEK -> R.drawable.ic_deepseek_logo
             ServiceType.OLLAMA -> R.drawable.ic_ollama_logo_widget

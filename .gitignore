@@ -1,3 +1,4 @@
+/.idea/
 *.iml
 .gradle
 /local.properties
@@ -13,7 +14,6 @@ app/build/
 /captures
 .externalNativeBuild
 .cxx
-local.properties
 release.jks
 .backup/
 .operit/
@@ -23,7 +23,8 @@ tmp_cc/
 goal.md
 /reference/
 
-.idea/
-local.properties
-emulator_screenshot.png
-rainytoken_hyperos3.patch
+
+# 本地测试截图（根目录）
+/screenshot_*.png
+/emulator_screenshot.png
+/rainytoken_hyperos3.patch

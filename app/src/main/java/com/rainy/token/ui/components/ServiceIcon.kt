@@ -61,9 +61,9 @@ fun ServiceIcon(
                 contentAlignment = Alignment.Center
             ) {
                 Image(
-                    painter = painterResource(id = R.drawable.ic_opencode_go_logo),
-                    contentDescription = "CommandCode Go",
-                    modifier = Modifier.size((size * 0.85).dp, ((size * 0.85f * 30f / 54f)).dp)
+                    painter = painterResource(id = R.drawable.ic_commandcode_logo_widget),
+                    contentDescription = "CommandCode GOAT",
+                    modifier = Modifier.size((size * 0.85).dp)
                 )
             }
         }
