@@ -17,6 +17,7 @@ import com.rainy.token.domain.service.ServiceType
 import com.rainy.token.ui.components.normalizeWindowLabel
 import com.rainy.token.ui.theme.ThemePresets
 import com.rainy.token.data.local.appSettingsStore
+import com.rainy.token.data.repository.WeatherRepository
 import com.rainy.token.util.LocaleManager
 import androidx.compose.ui.graphics.toArgb
 import kotlinx.coroutines.flow.first
@@ -206,15 +207,48 @@ class OpenCodeGoWidgetProvider : AppWidgetProvider() {
         // 星期（跟随系统语言，中文输出"周三"）
         views.setTextViewText(R.id.widget_weekday, weekdayFmt.format(cal.time))
 
-        // 天气（从 AppSettingsStore 读取缓存城市；无缓存时显示默认晴天图标预览）
-        val weatherText = runBlocking {
+        // 天气（显示和风天气图标 + 城市/温度）
+        runBlocking {
             try {
                 val store = context.applicationContext.appSettingsStore
                 val city = store.weatherCity.first()
-                if (city.isNotBlank()) "☀️ $city" else "☀️ 25°C"
-            } catch (_: Exception) { "☀️ 25°C" }
+                val text = store.weatherText.first()
+                val icon = store.weatherIcon.first()
+                val temp = store.weatherTemp.first()
+
+                if (city.isNotBlank() || temp.isNotBlank()) {
+                    // 有缓存天气数据 → 显示真实图标
+                    val iconRes = if (WeatherRepository.hasIcon(icon)) {
+                        context.resources.getIdentifier(
+                            WeatherRepository.iconDrawableName(icon),
+                            "drawable", context.packageName
+                        ).takeIf { it != 0 }
+                    } else null
+
+                    if (iconRes != null) {
+                        views.setImageViewResource(R.id.widget_weather_icon, iconRes)
+                        views.setViewVisibility(R.id.widget_weather_icon, android.view.View.VISIBLE)
+                    } else {
+                        views.setViewVisibility(R.id.widget_weather_icon, android.view.View.GONE)
+                    }
+
+                    val label = buildString {
+                        if (city.isNotBlank()) append(city)
+                        if (temp.isNotBlank()) {
+                            if (isNotEmpty()) append(" ")
+                            append(temp).append("°")
+                        }
+                    }
+                    views.setTextViewText(R.id.widget_weather, label.ifBlank { text })
+                } else {
+                    views.setViewVisibility(R.id.widget_weather_icon, android.view.View.GONE)
+                    views.setTextViewText(R.id.widget_weather, "")
+                }
+            } catch (_: Exception) {
+                views.setViewVisibility(R.id.widget_weather_icon, android.view.View.GONE)
+                views.setTextViewText(R.id.widget_weather, "")
+            }
         }
-        views.setTextViewText(R.id.widget_weather, weatherText)
     }
 
     /**

@@ -191,8 +191,10 @@ fun SettingsScreen(
                     WeatherConfigCard(
                         weatherEnabled = settingsState.weatherEnabled,
                         qweatherKey = settingsState.qweatherKey,
+                        qweatherHost = settingsState.qweatherHost,
                         onWeatherEnabledChanged = { viewModel.setWeatherEnabled(it) },
-                        onQWeatherKeyChanged = { viewModel.setQWeatherKey(it) }
+                        onQWeatherKeyChanged = { viewModel.setQWeatherKey(it) },
+                        onQWeatherHostChanged = { viewModel.setQWeatherHost(it) }
                     )
                 }
 
@@ -442,8 +444,10 @@ private fun RefreshIntervalCard(
 private fun WeatherConfigCard(
     weatherEnabled: Boolean,
     qweatherKey: String,
+    qweatherHost: String,
     onWeatherEnabledChanged: (Boolean) -> Unit,
-    onQWeatherKeyChanged: (String) -> Unit
+    onQWeatherKeyChanged: (String) -> Unit,
+    onQWeatherHostChanged: (String) -> Unit
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -488,6 +492,30 @@ private fun WeatherConfigCard(
                         focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
                         unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant
                     )
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(
+                    text = stringResource(R.string.weather_qweather_host),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                TextField(
+                    value = qweatherHost,
+                    onValueChange = onQWeatherHostChanged,
+                    placeholder = { Text(stringResource(R.string.weather_qweather_host_hint)) },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    colors = TextFieldDefaults.colors(
+                        focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                        unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant
+                    )
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = stringResource(R.string.weather_qweather_host_note),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }

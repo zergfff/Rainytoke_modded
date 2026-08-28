@@ -26,7 +26,8 @@ data class SettingsUiStateData(
     val widgetRefreshIntervalMin: Int = 15,
     val widgetSelectedServices: Set<String> = setOf("opencode_go", "commandcode_go", "codex", "ollama"),
     val weatherEnabled: Boolean = false,
-    val qweatherKey: String = ""
+    val qweatherKey: String = "",
+    val qweatherHost: String = ""
 )
 
 @HiltViewModel
@@ -48,7 +49,8 @@ class SettingsViewModel @Inject constructor(
         settings.widgetRefreshIntervalMin,
         settings.widgetSelectedServices,
         settings.weatherEnabled,
-        settings.qweatherKey
+        settings.qweatherKey,
+        settings.qweatherHost
     ) { values: Array<Any> ->
         SettingsUiStateData(
             themeKey = values[0] as String,
@@ -56,7 +58,8 @@ class SettingsViewModel @Inject constructor(
             widgetRefreshIntervalMin = values[2] as Int,
             widgetSelectedServices = @Suppress("UNCHECKED_CAST") values[3] as Set<String>,
             weatherEnabled = values[4] as Boolean,
-            qweatherKey = values[5] as String
+            qweatherKey = values[5] as String,
+            qweatherHost = values[6] as String
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), SettingsUiStateData())
 
@@ -97,6 +100,10 @@ class SettingsViewModel @Inject constructor(
 
     fun setQWeatherKey(key: String) {
         viewModelScope.launch { secureStorage.setQWeatherKey(key) }
+    }
+
+    fun setQWeatherHost(host: String) {
+        viewModelScope.launch { settings.setQweatherHost(host) }
     }
 }
 

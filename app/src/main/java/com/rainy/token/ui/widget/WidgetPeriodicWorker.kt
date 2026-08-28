@@ -5,11 +5,13 @@ import androidx.hilt.work.HiltWorker
 import androidx.work.Constraints
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.ExistingWorkPolicy
 import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
+import com.rainy.token.data.local.SecureStorage
 import com.rainy.token.data.local.appSettingsStore
 import com.rainy.token.data.repository.WeatherRepository
 import com.rainy.token.domain.service.ServiceType
@@ -30,6 +32,7 @@ class WidgetPeriodicWorker @AssistedInject constructor(
     @Assisted appContext: Context,
     @Assisted workerParams: WorkerParameters,
     private val refreshBalanceUseCase: RefreshBalanceUseCase,
+    private val secureStorage: SecureStorage,
     private val weatherRepository: WeatherRepository
 ) : CoroutineWorker(appContext, workerParams) {
 
@@ -45,16 +48,42 @@ class WidgetPeriodicWorker @AssistedInject constructor(
             // 静默失败
         }
 
-        // 天气刷新
+        // 天气刷新（定位 + 天气，跟随本 Worker 的刷新间隔）
         try {
             val store = ctx.appSettingsStore
             val weatherEnabled = store.weatherEnabled.first()
-            val qweatherKey = store.qweatherKey.first()
+            // API Key 存在加密 SecureStorage 中，DataStore 里的 qweatherKey 不参与鉴权
+            val qweatherKey = secureStorage.getQWeatherKey().orEmpty()
+            val qweatherHost = store.qweatherHost.first()
             if (weatherEnabled && qweatherKey.isNotBlank()) {
-                val snapshot = weatherRepository.fetchNow(qweatherKey, ctx)
+                // 优先使用系统定位更新经纬度，失败则用上次缓存的坐标
+                val loc = weatherRepository.getCoarseLocation(ctx)
+                if (loc != null) {
+                    store.setWeatherLocation(loc.latitude.toFloat(), loc.longitude.toFloat())
+                }
+                val cachedLat = store.weatherLatitude.first()
+                val cachedLon = store.weatherLongitude.first()
+                val latLon = if (loc != null) {
+                    loc.latitude to loc.longitude
+                } else if (cachedLat != 0f || cachedLon != 0f) {
+                    cachedLat.toDouble() to cachedLon.toDouble()
+                } else {
+                    null
+                }
+
+                val snapshot = weatherRepository.fetchNow(
+                    apiKey = qweatherKey,
+                    apiHost = qweatherHost,
+                    latLon = latLon,
+                    context = ctx
+                )
                 if (snapshot != null) {
-                    store.setWeatherCity(snapshot.city)
-                    store.setLastWeatherFetchAt(System.currentTimeMillis())
+                    store.setWeatherSnapshot(
+                        city = snapshot.city,
+                        text = snapshot.text,
+                        icon = snapshot.icon,
+                        temp = snapshot.tempC
+                    )
                 }
             }
         } catch (_: Exception) {
@@ -68,6 +97,7 @@ class WidgetPeriodicWorker @AssistedInject constructor(
 
     companion object {
         private const val WORK_NAME = "widget_periodic_refresh"
+        private const val WORK_NAME_ONCE = "widget_refresh_once"
 
         /** 调度周期性刷新（≥15min），使用 KEEP 策略避免重复 */
         fun schedule(context: Context, intervalMin: Int = 15) {
@@ -90,6 +120,24 @@ class WidgetPeriodicWorker @AssistedInject constructor(
         /** 取消周期性刷新 */
         fun cancel(context: Context) {
             WorkManager.getInstance(context).cancelUniqueWork(WORK_NAME)
+        }
+
+        /**
+         * 立即执行一次刷新（天气开关打开、定位授权后等场景）。
+         * 使用唯一一次性任务，避免重复排队。
+         */
+        fun requestImmediate(context: Context) {
+            val constraints = Constraints.Builder()
+                .setRequiredNetworkType(NetworkType.CONNECTED)
+                .build()
+            val request = OneTimeWorkRequestBuilder<WidgetPeriodicWorker>()
+                .setConstraints(constraints)
+                .build()
+            WorkManager.getInstance(context).enqueueUniqueWork(
+                WORK_NAME_ONCE,
+                ExistingWorkPolicy.KEEP,
+                request
+            )
         }
     }
 }

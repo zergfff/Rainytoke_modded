@@ -30,6 +30,7 @@ class WidgetRefreshReceiver : BroadcastReceiver() {
         )
         val useCase = entryPoint.refreshBalanceUseCase()
         val weatherRepository = entryPoint.weatherRepository()
+        val secureStorage = entryPoint.secureStorage()
         OpenCodeGoWidgetProvider.showRefreshing(appContext)
 
         CoroutineScope(Dispatchers.IO).launch {
@@ -42,16 +43,39 @@ class WidgetRefreshReceiver : BroadcastReceiver() {
                     selectedResult.isSuccess || dsResult.isSuccess
                 } == true
 
-                // 天气刷新
+                // 天气刷新（与周期 Worker 一致：定位 + 天气）
                 try {
                     val store = appContext.appSettingsStore
                     val weatherEnabled = store.weatherEnabled.first()
-                    val qweatherKey = store.qweatherKey.first()
+                    // API Key 存在加密 SecureStorage 中
+                    val qweatherKey = secureStorage.getQWeatherKey().orEmpty()
+                    val qweatherHost = store.qweatherHost.first()
                     if (weatherEnabled && qweatherKey.isNotBlank()) {
-                        val snapshot = weatherRepository.fetchNow(qweatherKey, appContext)
+                        val loc = weatherRepository.getCoarseLocation(appContext)
+                        if (loc != null) {
+                            store.setWeatherLocation(loc.latitude.toFloat(), loc.longitude.toFloat())
+                        }
+                        val cachedLat = store.weatherLatitude.first()
+                        val cachedLon = store.weatherLongitude.first()
+                        val latLon = if (loc != null) {
+                            loc.latitude to loc.longitude
+                        } else if (cachedLat != 0f || cachedLon != 0f) {
+                            cachedLat.toDouble() to cachedLon.toDouble()
+                        } else null
+
+                        val snapshot = weatherRepository.fetchNow(
+                            apiKey = qweatherKey,
+                            apiHost = qweatherHost,
+                            latLon = latLon,
+                            context = appContext
+                        )
                         if (snapshot != null) {
-                            store.setWeatherCity(snapshot.city)
-                            store.setLastWeatherFetchAt(System.currentTimeMillis())
+                            store.setWeatherSnapshot(
+                                city = snapshot.city,
+                                text = snapshot.text,
+                                icon = snapshot.icon,
+                                temp = snapshot.tempC
+                            )
                         }
                     }
                 } catch (_: Exception) {

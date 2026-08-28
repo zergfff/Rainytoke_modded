@@ -40,7 +40,11 @@ class AppSettingsStore @Inject constructor(
         val widgetSelectedServices = stringSetPreferencesKey("widget_selected_services")
         val weatherEnabled = booleanPreferencesKey("weather_enabled")
         val qweatherKey = stringPreferencesKey("qweather_key")
+        val qweatherHost = stringPreferencesKey("qweather_host")
         val weatherCity = stringPreferencesKey("weather_city")
+        val weatherText = stringPreferencesKey("weather_text")
+        val weatherIcon = stringPreferencesKey("weather_icon")
+        val weatherTemp = stringPreferencesKey("weather_temp")
         val weatherLatitude = floatPreferencesKey("weather_latitude")
         val weatherLongitude = floatPreferencesKey("weather_longitude")
         val lastWeatherFetchAt = longPreferencesKey("last_weather_fetch_at")
@@ -57,7 +61,11 @@ class AppSettingsStore @Inject constructor(
     }
     val weatherEnabled: Flow<Boolean> = ds.data.map { it[Keys.weatherEnabled] ?: false }
     val qweatherKey: Flow<String> = ds.data.map { it[Keys.qweatherKey] ?: "" }
+    val qweatherHost: Flow<String> = ds.data.map { it[Keys.qweatherHost] ?: "" }
     val weatherCity: Flow<String> = ds.data.map { it[Keys.weatherCity] ?: "" }
+    val weatherText: Flow<String> = ds.data.map { it[Keys.weatherText] ?: "" }
+    val weatherIcon: Flow<String> = ds.data.map { it[Keys.weatherIcon] ?: "" }
+    val weatherTemp: Flow<String> = ds.data.map { it[Keys.weatherTemp] ?: "" }
     val weatherLatitude: Flow<Float> = ds.data.map { it[Keys.weatherLatitude] ?: 0f }
     val weatherLongitude: Flow<Float> = ds.data.map { it[Keys.weatherLongitude] ?: 0f }
     val lastWeatherFetchAt: Flow<Long> = ds.data.map { it[Keys.lastWeatherFetchAt] ?: 0L }
@@ -87,8 +95,28 @@ class AppSettingsStore @Inject constructor(
         ds.edit { it[Keys.qweatherKey] = value }
     }
 
+    suspend fun setQweatherHost(value: String) {
+        ds.edit { it[Keys.qweatherHost] = value }
+    }
+
     suspend fun setWeatherCity(value: String) {
         ds.edit { it[Keys.weatherCity] = value }
+    }
+
+    /** 保存天气快照（城市、现象文字、图标码、温度） */
+    suspend fun setWeatherSnapshot(
+        city: String,
+        text: String,
+        icon: String,
+        temp: String
+    ) {
+        ds.edit {
+            it[Keys.weatherCity] = city
+            it[Keys.weatherText] = text
+            it[Keys.weatherIcon] = icon
+            it[Keys.weatherTemp] = temp
+            it[Keys.lastWeatherFetchAt] = System.currentTimeMillis()
+        }
     }
 
     suspend fun setWeatherLocation(lat: Float, lon: Float) {
