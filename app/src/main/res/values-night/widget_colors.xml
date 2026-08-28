@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- 小组件文字颜色（亮色模式，浅色背景） -->
+    <!-- 小组件文字颜色（深色模式，背景 #2D1825） -->
     <color name="widget_time_text">#FF85A2</color>
-    <color name="widget_muted_text">#8A7A82</color>
-    <color name="widget_primary_text">#3D2C35</color>
-    <color name="widget_secondary_text">#B0A0A7</color>
+    <color name="widget_muted_text">#C4A0AB</color>
+    <color name="widget_primary_text">#FFD1DC</color>
+    <color name="widget_secondary_text">#8A7A82</color>
     <color name="widget_updated_text">#C4A0AB</color>
-    <!-- 进度条颜色 -->
+    <!-- 进度条颜色（深色背景下同样鲜艳可见） -->
     <color name="widget_bar_5h">#FF85A2</color>
     <color name="widget_bar_weekly">#FFA726</color>
     <color name="widget_bar_monthly">#FF85A2</color>

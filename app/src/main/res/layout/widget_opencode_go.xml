@@ -35,7 +35,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="12:00"
-                android:textColor="#FF85A2"
+                android:textColor="@color/widget_time_text"
                 android:textSize="50sp"
                 android:textStyle="bold"
                 android:layout_marginEnd="8dp" />
@@ -45,7 +45,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="Mon"
-                android:textColor="#8A7A82"
+                android:textColor="@color/widget_muted_text"
                 android:textSize="20sp"
                 android:layout_marginEnd="6dp" />
 
@@ -54,7 +54,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="08/28"
-                android:textColor="#8A7A82"
+                android:textColor="@color/widget_muted_text"
                 android:textSize="20sp"
                 android:layout_marginEnd="6dp" />
 
@@ -64,7 +64,7 @@
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
                 android:text="☀️ 25°C"
-                android:textColor="#8A7A82"
+                android:textColor="@color/widget_muted_text"
                 android:textSize="20sp"
                 android:singleLine="true"
                 android:ellipsize="end"
@@ -100,7 +100,7 @@
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:text="@string/widget_title_opencode"
-            android:textColor="#8A7A82"
+            android:textColor="@color/widget_muted_text"
             android:textSize="14sp"
             android:maxLines="1"
             android:ellipsize="end" />
@@ -112,7 +112,7 @@
             android:maxLines="1"
             android:ellipsize="end"
             android:text="--"
-            android:textColor="#C4A0AB"
+            android:textColor="@color/widget_updated_text"
             android:textSize="10sp" />
 
         <TextView
@@ -120,7 +120,7 @@
             android:layout_width="36dp"
             android:layout_height="wrap_content"
             android:text="↻"
-            android:textColor="#FF85A2"
+            android:textColor="@color/widget_time_text"
             android:textSize="20sp"
             android:layout_marginStart="6dp"
             android:gravity="center" />
@@ -141,12 +141,12 @@
             android:minWidth="30dp"
             android:layout_marginEnd="4dp" android:layout_height="wrap_content"
             android:maxLines="1" android:ellipsize="end"
-            android:text="5h" android:textColor="#8A7A82" android:textSize="14sp" />
+            android:text="5h" android:textColor="@color/widget_muted_text" android:textSize="14sp" />
 
         <TextView android:id="@+id/row1_pct"
             android:layout_width="wrap_content"
             android:minWidth="26dp" android:layout_height="wrap_content"
-            android:text="--" android:textColor="#3D2C35" android:textSize="15sp"
+            android:text="--" android:textColor="@color/widget_primary_text" android:textSize="15sp"
             android:textStyle="bold" android:gravity="end" />
 
         <ProgressBar android:id="@+id/row1_bar"
@@ -160,7 +160,7 @@
             android:layout_width="wrap_content"
             android:minWidth="34dp"
             android:layout_marginStart="4dp" android:layout_height="wrap_content"
-            android:text="--" android:textColor="#B0A0A7" android:textSize="13sp" />
+            android:text="--" android:textColor="@color/widget_secondary_text" android:textSize="13sp" />
     </LinearLayout>
 
     <!-- 本周 -->
@@ -177,12 +177,12 @@
             android:minWidth="30dp"
             android:layout_marginEnd="4dp" android:layout_height="wrap_content"
             android:maxLines="1" android:ellipsize="end"
-            android:text="@string/window_weekly" android:textColor="#8A7A82" android:textSize="14sp" />
+            android:text="@string/window_weekly" android:textColor="@color/widget_muted_text" android:textSize="14sp" />
 
         <TextView android:id="@+id/row2_pct"
             android:layout_width="wrap_content"
             android:minWidth="26dp" android:layout_height="wrap_content"
-            android:text="--" android:textColor="#3D2C35" android:textSize="15sp"
+            android:text="--" android:textColor="@color/widget_primary_text" android:textSize="15sp"
             android:textStyle="bold" android:gravity="end" />
 
         <ProgressBar android:id="@+id/row2_bar"
@@ -196,7 +196,7 @@
             android:layout_width="wrap_content"
             android:minWidth="34dp"
             android:layout_marginStart="4dp" android:layout_height="wrap_content"
-            android:text="--" android:textColor="#B0A0A7" android:textSize="13sp" />
+            android:text="--" android:textColor="@color/widget_secondary_text" android:textSize="13sp" />
     </LinearLayout>
 
     <!-- 本月 -->
@@ -213,12 +213,12 @@
             android:minWidth="30dp"
             android:layout_marginEnd="4dp" android:layout_height="wrap_content"
             android:maxLines="1" android:ellipsize="end"
-            android:text="@string/window_monthly" android:textColor="#8A7A82" android:textSize="14sp" />
+            android:text="@string/window_monthly" android:textColor="@color/widget_muted_text" android:textSize="14sp" />
 
         <TextView android:id="@+id/row3_pct"
             android:layout_width="wrap_content"
             android:minWidth="26dp" android:layout_height="wrap_content"
-            android:text="--" android:textColor="#3D2C35" android:textSize="15sp"
+            android:text="--" android:textColor="@color/widget_primary_text" android:textSize="15sp"
             android:textStyle="bold" android:gravity="end" />
 
         <ProgressBar android:id="@+id/row3_bar"
@@ -232,7 +232,7 @@
             android:layout_width="wrap_content"
             android:minWidth="34dp"
             android:layout_marginStart="4dp" android:layout_height="wrap_content"
-            android:text="--" android:textColor="#B0A0A7" android:textSize="13sp" />
+            android:text="--" android:textColor="@color/widget_secondary_text" android:textSize="13sp" />
     </LinearLayout>
 
     <!-- DeepSeek 余额（独立页面，默认隐藏；仅 DeepSeek 页显示，无进度条） -->
@@ -257,7 +257,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="@string/widget_deepseek_balance"
-            android:textColor="#8A7A82"
+            android:textColor="@color/widget_muted_text"
             android:textSize="14sp" />
 
         <TextView
@@ -265,7 +265,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="--"
-            android:textColor="#3D2C35"
+            android:textColor="@color/widget_primary_text"
             android:textSize="15sp"
             android:textStyle="bold"
             android:layout_marginStart="6dp" />
