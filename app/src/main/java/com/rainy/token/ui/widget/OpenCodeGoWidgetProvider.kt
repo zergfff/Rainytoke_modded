@@ -107,9 +107,16 @@ class OpenCodeGoWidgetProvider : AppWidgetProvider() {
                 context, 10, WidgetIntentHelper.clockIntent(context),
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
+            // 时钟行点击 → 打开时钟
             views.setOnClickPendingIntent(R.id.widget_time, clockPi)
-            views.setOnClickPendingIntent(R.id.widget_weekday, clockPi)
-            views.setOnClickPendingIntent(R.id.widget_date, clockPi)
+
+            // 星期、日期 → 打开日历
+            val calendarPi = PendingIntent.getActivity(
+                context, 12, WidgetIntentHelper.calendarIntent(context),
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+            )
+            views.setOnClickPendingIntent(R.id.widget_weekday, calendarPi)
+            views.setOnClickPendingIntent(R.id.widget_date, calendarPi)
 
             // 天气行点击 → 打开天气
             views.setOnClickPendingIntent(R.id.widget_weather, PendingIntent.getActivity(
@@ -239,6 +246,21 @@ private fun applyFontScale(views: RemoteViews, context: Context, scale: Float) {
     )
     for ((id, baseSp) in targets) {
         views.setTextViewTextSize(id, TypedValue.COMPLEX_UNIT_SP, baseSp * scale)
+    }
+
+    // 统一三行左侧列宽，保证三个进度条左端纵向对齐
+    //（label/pct 若用 wrap_content，"5h" 比"本周/本月"窄，进度条左端会错开）
+    val labelW = 44f * scale
+    val pctW = 38f * scale
+    val resetW = 48f * scale
+    for (id in listOf(R.id.row1_label, R.id.row2_label, R.id.row3_label)) {
+        views.setViewLayoutWidth(id, labelW, TypedValue.COMPLEX_UNIT_DIP)
+    }
+    for (id in listOf(R.id.row1_pct, R.id.row2_pct, R.id.row3_pct)) {
+        views.setViewLayoutWidth(id, pctW, TypedValue.COMPLEX_UNIT_DIP)
+    }
+    for (id in listOf(R.id.row1_reset, R.id.row2_reset, R.id.row3_reset)) {
+        views.setViewLayoutWidth(id, resetW, TypedValue.COMPLEX_UNIT_DIP)
     }
 }
 
@@ -395,9 +417,9 @@ private fun populateServiceRows(
 
     private fun setProgressColor(views: RemoteViews, barViewId: Int, pct: Int) {
         val color = when {
-            pct >= 80 -> 0xFFE91E63
-            pct >= 50 -> 0xFFFFA726
-            else -> 0xFFFF85A2
+            pct >= 80 -> 0xFFE91E63   // 紧张：红粉
+            pct >= 50 -> 0xFFFFA726   // 过半：橙
+            else -> 0xFF4CAF50        // < 50%：绿
         }
         views.setColorStateList(barViewId, "setProgressTintList", ColorStateList.valueOf(color.toInt()))
     }
