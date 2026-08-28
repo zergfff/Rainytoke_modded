@@ -46,17 +46,19 @@ class CommandCodeGoRepository(
             return@withContext Result.failure(RepositoryError.InvalidCredential())
         }
 
-        // token 字段存 API Key
-        val apiKey = credential.token
-        if (apiKey.isNullOrBlank()) {
-            return@withContext Result.failure(RepositoryError.InvalidCredential())
-        }
+        // 会话 Cookie 由 resolveSessionCookie() 负责解析（authCookie / cookies / token）
+        // 不再要求 token 字段必填——官方已废弃 API Key，改用会话 Cookie
 
         // 顺序拉取 credits + subscriptions（credits 是主要数据源，subscription 用于补充计划信息）
-        val creditsResult = runCatching { fetchCredits(apiKey) }
-        val subResult = runCatching { fetchSubscription(apiKey) }
+        // 两个端点都用会话 Cookie 鉴权（API Key 已被官方废弃）
+        val creditsResult = runCatching { fetchCredits(credential) }
+        val subResult = runCatching { fetchSubscription(credential) }
 
         val creditsPayload = creditsResult.getOrElse { e ->
+            // 会话失效时给出明确原因，方便用户重新登录
+            if (e is RepositoryError.InvalidCredential) {
+                return@withContext Result.failure(e)
+            }
             return@withContext Result.failure(
                 if (e is IOException) RepositoryError.Network(e)
                 else RepositoryError.Unknown(e)
@@ -112,11 +114,37 @@ class CommandCodeGoRepository(
         Result.success(balance)
     }
 
-    private fun fetchCredits(apiKey: String): CreditsPayload {
+    /**
+     * 构造 better-auth 会话 Cookie 头。
+     *
+     * CommandCode 于 2026 年改版：billing 端点不再接受 API Key，
+     * 必须使用浏览器登录后的会话 Cookie（见 CodexBar 文档）。
+     *
+     * 取值优先级：
+     *  1. `authCookie` —— 用户直接粘贴的 session_token 值
+     *  2. `cookies` 列表里名为 `*session_token*` 的项（WebView 登录后自动抓取）
+     *  3. `token` 字段（兼容早期把 session_token 存在这里的写法）
+     */
+    private fun resolveSessionCookie(credential: Credential.SessionCredential): String? {
+        credential.authCookie?.takeIf { it.isNotBlank() }?.let { return it.trim() }
+
+        credential.cookies.firstOrNull {
+            it.name.contains("session_token", ignoreCase = true) && it.value.isNotBlank()
+        }?.let { return it.value.trim() }
+
+        return credential.token?.takeIf { it.isNotBlank() }?.trim()
+    }
+
+    private fun fetchCredits(credential: Credential.SessionCredential): CreditsPayload {
+        val sessionToken = resolveSessionCookie(credential)
+            ?: throw RepositoryError.InvalidCredential()
+
         val request = Request.Builder()
-            .url("$apiBase/alpha/billing/credits")
-            .header("Authorization", "Bearer $apiKey")
+            .url("$apiBase/internal/billing/credits")
+            .header("Cookie", "__Secure-commandcode_prod_.session_token=$sessionToken")
             .header("Accept", "application/json")
+            .header("Origin", WEB_ORIGIN)
+            .header("Referer", "$WEB_ORIGIN/")
             .get()
             .build()
 
@@ -133,7 +161,7 @@ class CommandCodeGoRepository(
             obj[key]?.jsonPrimitive?.double ?: 0.0
 
         fun getLong(obj: JsonObject, key: String): Long? =
-            obj[key]?.jsonPrimitive?.long
+            obj[key]?.jsonPrimitive?.long?.takeIf { it > 0 }
 
         val fiveHour = root["windowLimits"]?.jsonObject?.let { limits ->
             if (limits["limited"]?.jsonPrimitive?.content == "true") {
@@ -149,7 +177,10 @@ class CommandCodeGoRepository(
         return CreditsPayload(
             monthlyCredits = getDouble(credits, "monthlyCredits"),
             purchasedCredits = getDouble(credits, "purchasedCredits"),
-            freeCredits = getDouble(credits, "freeCredits"),
+            // 新版响应移除了 freeCredits，回退到 premium + opensource 之和
+            freeCredits = getDouble(credits, "freeCredits").takeIf { it != 0.0 }
+                ?: (getDouble(credits, "premiumMonthlyCredits") +
+                    getDouble(credits, "opensourceMonthlyCredits")),
             fiveHourUsed = fiveHour?.let { getDouble(it, "used") },
             fiveHourCap = fiveHour?.let { getDouble(it, "cap") },
             fiveHourResetAt = fiveHour?.let { getLong(it, "resetAt") },
@@ -159,11 +190,15 @@ class CommandCodeGoRepository(
         )
     }
 
-    private fun fetchSubscription(apiKey: String): SubscriptionPayload? {
+    private fun fetchSubscription(credential: Credential.SessionCredential): SubscriptionPayload? {
+        val sessionToken = resolveSessionCookie(credential) ?: return null
+
         val request = Request.Builder()
-            .url("$apiBase/alpha/billing/subscriptions")
-            .header("Authorization", "Bearer $apiKey")
+            .url("$apiBase/internal/billing/subscriptions")
+            .header("Cookie", "__Secure-commandcode_prod_.session_token=$sessionToken")
             .header("Accept", "application/json")
+            .header("Origin", WEB_ORIGIN)
+            .header("Referer", "$WEB_ORIGIN/")
             .get()
             .build()
 
@@ -191,8 +226,11 @@ class CommandCodeGoRepository(
         PLAN_NAMES[planId.lowercase()] ?: planId
 
     companion object {
+        private const val WEB_ORIGIN = "https://commandcode.ai"
+
         private val PLANS = mapOf(
             "individual-go" to 10.0,
+            "individual-goat" to 60.0,
             "individual-pro" to 30.0,
             "individual-max" to 150.0,
             "individual-ultra" to 300.0
@@ -200,6 +238,7 @@ class CommandCodeGoRepository(
 
         private val PLAN_NAMES = mapOf(
             "individual-go" to "Go",
+            "individual-goat" to "GOAT",
             "individual-pro" to "Pro",
             "individual-max" to "Max",
             "individual-ultra" to "Ultra"
