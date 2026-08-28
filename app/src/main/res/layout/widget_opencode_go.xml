@@ -241,16 +241,22 @@
             android:textSize="11sp" />
 
         <TextView
-            android:id="@+id/widget_ds_amount"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="--"
-            android:textColor="#3D2C35"
-            android:textSize="11sp"
-            android:textStyle="bold"
-            android:layout_marginStart="4dp" />
-    </LinearLayout>
+                        android:id="@+id/widget_ds_amount"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="--"
+                        android:textColor="#3D2C35"
+                        android:textSize="11sp"
+                        android:textStyle="bold"
+                        android:layout_marginStart="4dp" />
+            </LinearLayout>
 
-</LinearLayout>
+            <!-- 最下方弹性空白（第 3 个） -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1" />
 
-</FrameLayout>
+        </LinearLayout>
+
+        </FrameLayout>
