@@ -350,6 +350,13 @@ class OpenCodeGoWidgetProvider : AppWidgetProvider() {
 
     private fun setEmptyState(views: RemoteViews, context: Context) {
         views.setTextViewText(R.id.widget_updated, context.getString(R.string.widget_no_data))
+        // 空状态也设置行标签（跟随 app 语言，中文显示 本周/本月）
+        setRowLabel(
+            views,
+            context.getString(R.string.window_5h_short),
+            context.getString(R.string.window_weekly),
+            context.getString(R.string.window_monthly)
+        )
         for (pctId in listOf(R.id.row1_pct, R.id.row2_pct, R.id.row3_pct)) {
             views.setTextViewText(pctId, "—")
         }

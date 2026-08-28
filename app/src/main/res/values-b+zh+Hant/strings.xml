@@ -288,7 +288,7 @@
     <string name="widget_title_opencode">OpenCode Go · 用量</string>
     <string name="widget_deepseek_balance">DeepSeek 餘額</string>
     <string name="widget_auto_refresh">自動重新整理</string>
-    <string name="widget_service_quota">%1$s · 額度</string>
+    <string name="widget_service_quota">%1$s</string>
     <string name="widget_quota_with_plan">%1$s · %2$s</string>
     <string name="widget_updated_at">更新 %1$s</string>
     <string name="widget_no_data">暫無數據</string>
