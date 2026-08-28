@@ -94,38 +94,18 @@ class OpenCodeGoWidgetProvider : AppWidgetProvider() {
             // ─── 时钟/日期/星期/天气行 ───
             updateClockRow(views, localized)
 
-            // ─── 品牌名 ───
-            views.setTextViewText(R.id.widget_brand, localized.getString(R.string.widget_brand))
-            views.setTextColor(R.id.widget_brand, accentColor)
-
-            // DeepSeek 余额标签
-            views.setTextViewText(R.id.widget_ds_label, localized.getString(R.string.widget_deepseek_balance))
-
             // 时钟行点击 → 打开时钟
-            val clockIntent = PendingIntent.getActivity(
+            val clockPi = PendingIntent.getActivity(
                 context, 10, WidgetIntentHelper.clockIntent(context),
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
-            views.setOnClickPendingIntent(R.id.widget_time, clockIntent)
-            views.setOnClickPendingIntent(R.id.widget_weekday, clockIntent)
-            views.setOnClickPendingIntent(R.id.widget_date, clockIntent)
+            views.setOnClickPendingIntent(R.id.widget_time, clockPi)
+            views.setOnClickPendingIntent(R.id.widget_weekday, clockPi)
+            views.setOnClickPendingIntent(R.id.widget_date, clockPi)
 
             // 天气行点击 → 打开天气
             views.setOnClickPendingIntent(R.id.widget_weather, PendingIntent.getActivity(
                 context, 11, WidgetIntentHelper.weatherIntent(context),
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-            ))
-
-            // 品牌 → 打开 APP
-            val openAppIntent = Intent(context, MainActivity::class.java).apply {
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-            }
-            views.setOnClickPendingIntent(R.id.widget_wordmark, PendingIntent.getActivity(
-                context, 0, openAppIntent,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-            ))
-            views.setOnClickPendingIntent(R.id.widget_open_hint, PendingIntent.getActivity(
-                context, 0, openAppIntent,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             ))
 
@@ -135,24 +115,14 @@ class OpenCodeGoWidgetProvider : AppWidgetProvider() {
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             ))
 
-            // 服务区点击 → 跳转日历
-            val calendarPi = PendingIntent.getActivity(
-                context, 12, WidgetIntentHelper.calendarIntent(context),
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-            )
-            views.setOnClickPendingIntent(R.id.widget_service_title, calendarPi)
-
-            // 切换服务
-            views.setOnClickPendingIntent(R.id.widget_switch, PendingIntent.getBroadcast(
+            // 整卡点击 → 切换服务（选中 >1 服务时）
+            val switchPi = PendingIntent.getBroadcast(
                 context, 2, Intent(context, OpenCodeGoWidgetProvider::class.java).apply {
                     action = ACTION_SWITCH_SERVICE
                 },
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-            ))
-
-            // 应用主题强调色
-            views.setTextColor(R.id.widget_switch, accentColor)
-            views.setTextColor(R.id.widget_refresh, accentColor)
+            )
+            views.setOnClickPendingIntent(R.id.widget_content, switchPi)
 
             // 读缓存并填充数据
             runBlocking {
@@ -160,7 +130,8 @@ class OpenCodeGoWidgetProvider : AppWidgetProvider() {
                     val dataStore = context.applicationContext.balanceCacheDataStore
                     val cache = BalanceCache(dataStore)
                     val selectedService = currentDisplayService(context)
-                    views.setTextViewText(R.id.widget_switch, shortName(selectedService))
+                    // DeepSeek 余额标签
+                    views.setTextViewText(R.id.widget_ds_label, localized.getString(R.string.widget_deepseek_balance))
                     views.setTextViewText(
                         R.id.widget_service_title,
                         localized.getString(R.string.widget_service_quota, selectedService.displayName)
@@ -186,7 +157,6 @@ class OpenCodeGoWidgetProvider : AppWidgetProvider() {
                         )
                     } else {
                         setEmptyState(views, localized)
-                        views.setTextViewText(R.id.widget_switch, shortName(selectedService))
                         views.setTextViewText(
                             R.id.widget_service_title,
                             localized.getString(R.string.widget_service_quota, selectedService.displayName)
@@ -219,27 +189,18 @@ class OpenCodeGoWidgetProvider : AppWidgetProvider() {
 
     /** 更新时钟行：时间、星期、日期、天气 */
     private fun updateClockRow(views: RemoteViews, context: Context) {
-        val cal = Calendar.getInstance()
-        val timeFmt = SimpleDateFormat("HH:mm", Locale.getDefault())
-        val dateFmt = SimpleDateFormat("MM/dd", Locale.getDefault())
-        val weekdayFmt = SimpleDateFormat("EEEE", Locale.getDefault())
+        // 显式使用系统默认时区，保证与手机当前时间/时区一致
+        val tz = java.util.TimeZone.getDefault()
+        val cal = Calendar.getInstance(tz)
+        val timeFmt = SimpleDateFormat("HH:mm", Locale.getDefault()).apply { timeZone = tz }
+        val dateFmt = SimpleDateFormat("MM/dd", Locale.getDefault()).apply { timeZone = tz }
+        val weekdayFmt = SimpleDateFormat("EEE", Locale.getDefault()).apply { timeZone = tz }
 
-        views.setTextViewText(R.id.widget_time, timeFmt.format(Date()))
-        views.setTextViewText(R.id.widget_date, dateFmt.format(Date()))
+        views.setTextViewText(R.id.widget_time, timeFmt.format(cal.time))
+        views.setTextViewText(R.id.widget_date, dateFmt.format(cal.time))
 
-        // 星期缩写
-        val weekday = weekdayFmt.format(Date())
-        val weekdayShort = when {
-            weekday.startsWith("Mon") -> "Mon"
-            weekday.startsWith("Tue") -> "Tue"
-            weekday.startsWith("Wed") -> "Wed"
-            weekday.startsWith("Thu") -> "Thu"
-            weekday.startsWith("Fri") -> "Fri"
-            weekday.startsWith("Sat") -> "Sat"
-            weekday.startsWith("Sun") -> "Sun"
-            else -> weekday.take(3)
-        }
-        views.setTextViewText(R.id.widget_weekday, weekdayShort)
+        // 星期（跟随系统语言，中文输出"周三"）
+        views.setTextViewText(R.id.widget_weekday, weekdayFmt.format(cal.time))
 
         // 天气（从 AppSettingsStore 读取缓存的城市 + 温度）
         val weatherText = runBlocking {

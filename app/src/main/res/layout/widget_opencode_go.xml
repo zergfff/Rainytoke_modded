@@ -11,10 +11,12 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:orientation="vertical"
-        android:padding="8dp"
-        android:gravity="center_vertical">
+        android:padding="6dp"
+        android:gravity="center_vertical"
+        android:layout_marginTop="4dp"
+        android:layout_marginBottom="4dp">
 
-    <!-- 时钟/日期/星期/天气行 -->
+    <!-- 时钟/日期/星期/天气行（加大字体） -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -28,9 +30,9 @@
             android:layout_height="wrap_content"
             android:text="12:00"
             android:textColor="#FF85A2"
-            android:textSize="16sp"
+            android:textSize="22sp"
             android:textStyle="bold"
-            android:layout_marginEnd="6dp" />
+            android:layout_marginEnd="8dp" />
 
         <TextView
             android:id="@+id/widget_weekday"
@@ -38,8 +40,8 @@
             android:layout_height="wrap_content"
             android:text="Mon"
             android:textColor="#8A7A82"
-            android:textSize="10sp"
-            android:layout_marginEnd="6dp" />
+            android:textSize="13sp"
+            android:layout_marginEnd="8dp" />
 
         <TextView
             android:id="@+id/widget_date"
@@ -47,8 +49,8 @@
             android:layout_height="wrap_content"
             android:text="08/28"
             android:textColor="#8A7A82"
-            android:textSize="11sp"
-            android:layout_marginEnd="6dp" />
+            android:textSize="13sp"
+            android:layout_marginEnd="8dp" />
 
         <TextView
             android:id="@+id/widget_weather"
@@ -57,59 +59,39 @@
             android:layout_weight="1"
             android:text=""
             android:textColor="#8A7A82"
-            android:textSize="11sp"
+            android:textSize="13sp"
             android:singleLine="true"
             android:ellipsize="end"
             android:gravity="end" />
 
     </LinearLayout>
 
-    <!-- 第一行：品牌 + 切换 + 更新时间 + 刷新 -->
+    <!-- 服务标题 + 更新时间 + 刷新 -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
         android:gravity="center_vertical"
-        android:layout_marginBottom="2dp">
+        android:layout_marginBottom="4dp">
 
         <ImageView
-            android:id="@+id/widget_wordmark"
-            android:layout_width="wrap_content"
-            android:layout_height="24dp"
-            android:src="@drawable/rainytoken_wordmark"
-            android:contentDescription="RainyToken"
-            android:adjustViewBounds="true" />
+            android:id="@+id/widget_logo"
+            android:layout_width="22dp"
+            android:layout_height="12dp"
+            android:src="@drawable/ic_opencode_go_logo"
+            android:contentDescription="OpenCode Go"
+            android:layout_marginEnd="5dp" />
 
         <TextView
-            android:id="@+id/widget_open_hint"
-            android:layout_width="10dp"
-            android:layout_height="24dp"
-            android:text=">"
-            android:textColor="#C4A0AB"
-            android:textSize="14sp"
-            android:gravity="center" />
-
-        <TextView
-            android:id="@+id/widget_switch"
-            android:layout_width="48dp"
-            android:layout_height="24dp"
-            android:text="OCGO"
-            android:textColor="#FF85A2"
-            android:textSize="10sp"
-            android:textStyle="bold"
-            android:layout_marginStart="6dp"
-            android:gravity="center" />
-
-        <ProgressBar
-            style="@android:style/Widget.ProgressBar.Horizontal"
+            android:id="@+id/widget_service_title"
             android:layout_width="0dp"
-            android:layout_height="1dp"
+            android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:max="100"
-            android:progress="0"
-            android:progressTint="#00000000"
-            android:progressBackgroundTint="#00000000"
-            android:indeterminate="false" />
+            android:text="@string/widget_title_opencode"
+            android:textColor="#8A7A82"
+            android:textSize="11sp"
+            android:maxLines="1"
+            android:ellipsize="end" />
 
         <TextView
             android:id="@+id/widget_updated"
@@ -123,39 +105,14 @@
 
         <TextView
             android:id="@+id/widget_refresh"
-            android:layout_width="40dp"
-            android:layout_height="24dp"
+            android:layout_width="36dp"
+            android:layout_height="wrap_content"
             android:text="↻"
             android:textColor="#FF85A2"
             android:textSize="20sp"
             android:layout_marginStart="6dp"
             android:gravity="center" />
 
-        </LinearLayout>
-
-    <!-- 第二行：Logo + 服务标题 -->
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:gravity="center_vertical"
-        android:layout_marginBottom="6dp">
-
-        <ImageView
-            android:id="@+id/widget_logo"
-            android:layout_width="22dp"
-            android:layout_height="12dp"
-            android:src="@drawable/ic_opencode_go_logo"
-            android:contentDescription="OpenCode Go"
-            android:layout_marginEnd="5dp" />
-
-        <TextView
-            android:id="@+id/widget_service_title"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="@string/widget_title_opencode"
-            android:textColor="#8A7A82"
-            android:textSize="11sp" />
     </LinearLayout>
 
     <!-- 5h -->
@@ -164,7 +121,7 @@
         android:layout_height="wrap_content"
         android:orientation="horizontal"
         android:gravity="center_vertical"
-        android:layout_marginBottom="3dp">
+        android:layout_marginBottom="4dp">
 
         <TextView android:id="@+id/row1_label"
             android:layout_width="44dp" android:layout_height="wrap_content"
@@ -178,7 +135,7 @@
 
         <ProgressBar android:id="@+id/row1_bar"
             style="@android:style/Widget.ProgressBar.Horizontal"
-            android:layout_width="0dp" android:layout_height="6dp"
+            android:layout_width="0dp" android:layout_height="7dp"
             android:layout_weight="1" android:layout_marginStart="8dp"
             android:layout_marginEnd="8dp" android:max="100" android:progress="0"
             android:progressTint="@color/widget_bar_5h" />
@@ -194,7 +151,7 @@
         android:layout_height="wrap_content"
         android:orientation="horizontal"
         android:gravity="center_vertical"
-        android:layout_marginBottom="3dp">
+        android:layout_marginBottom="4dp">
 
         <TextView android:id="@+id/row2_label"
             android:layout_width="44dp" android:layout_height="wrap_content"
@@ -208,7 +165,7 @@
 
         <ProgressBar android:id="@+id/row2_bar"
             style="@android:style/Widget.ProgressBar.Horizontal"
-            android:layout_width="0dp" android:layout_height="6dp"
+            android:layout_width="0dp" android:layout_height="7dp"
             android:layout_weight="1" android:layout_marginStart="8dp"
             android:layout_marginEnd="8dp" android:max="100" android:progress="0"
             android:progressTint="@color/widget_bar_weekly" />
@@ -224,7 +181,7 @@
         android:layout_height="wrap_content"
         android:orientation="horizontal"
         android:gravity="center_vertical"
-        android:layout_marginBottom="3dp">
+        android:layout_marginBottom="4dp">
 
         <TextView android:id="@+id/row3_label"
             android:layout_width="44dp" android:layout_height="wrap_content"
@@ -238,7 +195,7 @@
 
         <ProgressBar android:id="@+id/row3_bar"
             style="@android:style/Widget.ProgressBar.Horizontal"
-            android:layout_width="0dp" android:layout_height="6dp"
+            android:layout_width="0dp" android:layout_height="7dp"
             android:layout_weight="1" android:layout_marginStart="8dp"
             android:layout_marginEnd="8dp" android:max="100" android:progress="0"
             android:progressTint="@color/widget_bar_monthly" />
@@ -253,8 +210,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
-        android:gravity="center_vertical"
-        android:layout_marginBottom="2dp">
+        android:gravity="center_vertical">
 
         <ImageView
             android:layout_width="wrap_content"
@@ -281,25 +237,6 @@
             android:textSize="11sp"
             android:textStyle="bold"
             android:layout_marginStart="4dp" />
-    </LinearLayout>
-
-    <!-- 署名 -->
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:gravity="center_vertical">
-
-        <ProgressBar
-            style="@android:style/Widget.ProgressBar.Horizontal"
-            android:layout_width="0dp"
-            android:layout_height="1dp"
-            android:layout_weight="1"
-            android:max="100"
-            android:progress="0"
-            android:progressTint="#00000000"
-            android:progressBackgroundTint="#00000000"
-            android:indeterminate="false" />
     </LinearLayout>
 
 </LinearLayout>

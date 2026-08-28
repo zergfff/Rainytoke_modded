@@ -329,32 +329,34 @@ private fun WidgetServicesCard(
     onToggleService: (String, Boolean) -> Unit
 ) {
     val services = listOf(
-        "opencode_go" to stringResource(R.string.all_services),
-        "commandcode_go" to "CommandCode Go",
-        "codex" to "Codex",
-        "ollama" to "Ollama"
-    )
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text(
-                text = stringResource(R.string.title_widget_services),
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold
-            )
-            Text(
-                text = stringResource(R.string.widget_switch_hint),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 2.dp)
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            services.forEach { (key, name) ->
-                Row(
+            ServiceType.OPENCODE_GO to ServiceType.OPENCODE_GO.displayName,
+            ServiceType.COMMANDCODE_GO to ServiceType.COMMANDCODE_GO.displayName,
+            ServiceType.CODEX to ServiceType.CODEX.displayName,
+            ServiceType.DEEPSEEK to ServiceType.DEEPSEEK.displayName,
+            ServiceType.OLLAMA to ServiceType.OLLAMA.displayName
+        )
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text(
+                    text = stringResource(R.string.title_widget_services),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Text(
+                    text = stringResource(R.string.widget_switch_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 2.dp)
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                services.forEach { (service, name) ->
+                    val key = service.storageKey
+                    Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clickable {
