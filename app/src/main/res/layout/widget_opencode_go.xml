@@ -36,7 +36,7 @@
                 android:layout_height="wrap_content"
                 android:text="12:00"
                 android:textColor="#FF85A2"
-                android:textSize="35sp"
+                android:textSize="40sp"
                 android:textStyle="bold"
                 android:layout_marginEnd="8dp" />
 
@@ -46,7 +46,7 @@
                 android:layout_height="wrap_content"
                 android:text="Mon"
                 android:textColor="#8A7A82"
-                android:textSize="30sp"
+                android:textSize="25sp"
                 android:layout_marginEnd="6dp" />
 
             <TextView
@@ -55,7 +55,7 @@
                 android:layout_height="wrap_content"
                 android:text="08/28"
                 android:textColor="#8A7A82"
-                android:textSize="30sp"
+                android:textSize="25sp"
                 android:layout_marginEnd="6dp" />
 
             <TextView
@@ -65,7 +65,7 @@
                 android:layout_weight="1"
                 android:text=""
                 android:textColor="#8A7A82"
-                android:textSize="30sp"
+                android:textSize="25sp"
                 android:singleLine="true"
                 android:ellipsize="end"
                 android:gravity="end|bottom" />
