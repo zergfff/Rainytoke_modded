@@ -587,4 +587,9 @@
     <string name="title_app_font_size">APP 界面字体大小</string>
     <string name="title_widget_font_size">小组件字体大小</string>
     <string name="weather_host_required">必须填写 API Host——公共域名已于 2026 年停用。请在和风天气控制台「设置」中查看你的专属 Host。</string>
+    <string name="weather_qweather_key">和风天气 API Key</string>
+    <string name="weather_qweather_host">API Host</string>
+    <string name="weather_qweather_host_hint">abc123.def.qweatherapi.com</string>
+    <string name="weather_qweather_host_note">在和风天气控制台「设置」中查看你的专属 API Host。公共域名已于 2026 年停用，必须填写此项。</string>
+    <string name="refresh_interval">每 %1$d 分钟</string>
 </resources>

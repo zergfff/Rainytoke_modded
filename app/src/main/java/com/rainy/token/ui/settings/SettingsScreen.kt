@@ -376,67 +376,67 @@ private fun WidgetServicesCard(
     onToggleService: (String, Boolean) -> Unit
 ) {
     val services = listOf(
-            ServiceType.OPENCODE_GO to ServiceType.OPENCODE_GO.displayName,
-            ServiceType.COMMANDCODE_GO to ServiceType.COMMANDCODE_GO.displayName,
-            ServiceType.CODEX to ServiceType.CODEX.displayName,
-            ServiceType.DEEPSEEK to ServiceType.DEEPSEEK.displayName,
-            ServiceType.OLLAMA to ServiceType.OLLAMA.displayName
-        )
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
-        ) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Text(
-                    text = stringResource(R.string.title_widget_services),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold
-                )
-                Text(
-                    text = stringResource(R.string.widget_switch_hint),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 2.dp)
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                services.forEach { (service, name) ->
-                    val key = service.storageKey
-                    Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable {
-                            // 至少保留一个服务
-                            if (selectedServices.contains(key) && selectedServices.size > 1) {
-                                onToggleService(key, false)
-                            } else if (!selectedServices.contains(key)) {
-                                onToggleService(key, true)
-                            }
+        ServiceType.OPENCODE_GO to ServiceType.OPENCODE_GO.displayName,
+        ServiceType.COMMANDCODE_GO to ServiceType.COMMANDCODE_GO.displayName,
+        ServiceType.CODEX to ServiceType.CODEX.displayName,
+        ServiceType.DEEPSEEK to ServiceType.DEEPSEEK.displayName,
+        ServiceType.OLLAMA to ServiceType.OLLAMA.displayName
+    )
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(
+                text = stringResource(R.string.title_widget_services),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold
+            )
+            Text(
+                text = stringResource(R.string.widget_switch_hint),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 2.dp)
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            services.forEach { (service, name) ->
+                val key = service.storageKey
+                Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable {
+                        // 至少保留一个服务
+                        if (selectedServices.contains(key) && selectedServices.size > 1) {
+                            onToggleService(key, false)
+                        } else if (!selectedServices.contains(key)) {
+                            onToggleService(key, true)
                         }
-                        .padding(vertical = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Checkbox(
-                        checked = selectedServices.contains(key),
-                        onCheckedChange = { enabled ->
-                            if (enabled || selectedServices.size > 1) {
-                                onToggleService(key, enabled)
-                            }
-                        },
-                        colors = CheckboxDefaults.colors(
-                            checkedColor = MaterialTheme.colorScheme.primary
-                        )
+                    }
+                    .padding(vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Checkbox(
+                    checked = selectedServices.contains(key),
+                    onCheckedChange = { enabled ->
+                        if (enabled || selectedServices.size > 1) {
+                            onToggleService(key, enabled)
+                        }
+                    },
+                    colors = CheckboxDefaults.colors(
+                        checkedColor = MaterialTheme.colorScheme.primary
                     )
-                    Text(
-                        text = name,
-                        style = MaterialTheme.typography.bodyMedium,
-                        modifier = Modifier.padding(start = 8.dp)
-                    )
-                }
+                )
+                Text(
+                    text = name,
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.padding(start = 8.dp)
+                )
             }
         }
     }
+}
 }
 
 // ─── 刷新间隔卡片 ───

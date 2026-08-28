@@ -572,11 +572,8 @@
     <string name="theme_lilac">Lilac Purple</string>
     <string name="theme_material_you">Material You</string>
     <string name="font_small">Small (0.85x)</string>
-    <string name="font_normal">Normal (1.0x)</string>
     <string name="font_large">Large (1.15x)</string>
-    <string name="font_extra_large">Extra Large (1.3x)</string>
     <string name="refresh_interval">Every %1$d min</string>
-    <string name="all_services">All Services</string>
     <string name="widget_switch_hint">Toggle services to show on widget</string>
     <string name="widget_no_switch_hint">At least one service must be enabled</string>
     <string name="weather_qweather_key">QWeather API Key</string>
@@ -584,7 +581,6 @@
     <string name="weather_qweather_host">API Host</string>
     <string name="weather_qweather_host_hint">abc123.def.qweatherapi.com</string>
     <string name="weather_qweather_host_note">Find your API Host in QWeather Console → Settings. Leave blank to use the legacy shared domain.</string>
-    <string name="weather_city">%1$s</string>
     <string name="weather_enable">Enable live weather</string>
     <string name="weather_on">On</string>
     <string name="weather_off">Off</string>
