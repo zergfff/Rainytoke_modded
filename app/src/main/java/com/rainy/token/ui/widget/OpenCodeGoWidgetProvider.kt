@@ -203,16 +203,17 @@ class OpenCodeGoWidgetProvider : AppWidgetProvider() {
         // 星期（跟随系统语言，中文输出"周三"）
         views.setTextViewText(R.id.widget_weekday, weekdayFmt.format(cal.time))
 
-        // 天气（显示和风天气图标 + 城市/温度）
+        // 天气（只显示图标 + 温度，不显示城市/定位名；整组右对齐）
         runBlocking {
             try {
                 val store = context.applicationContext.appSettingsStore
-                val city = store.weatherCity.first()
                 val text = store.weatherText.first()
                 val icon = store.weatherIcon.first()
                 val temp = store.weatherTemp.first()
 
-                if (city.isNotBlank() || temp.isNotBlank()) {
+                val tempLabel = if (temp.isNotBlank()) "${temp.trim()}°" else ""
+
+                if (tempLabel.isNotEmpty()) {
                     // 有缓存天气数据 → 显示真实图标
                     val iconRes = if (WeatherRepository.hasIcon(icon)) {
                         context.resources.getIdentifier(
@@ -223,26 +224,19 @@ class OpenCodeGoWidgetProvider : AppWidgetProvider() {
 
                     if (iconRes != null) {
                         views.setImageViewResource(R.id.widget_weather_icon, iconRes)
-                        views.setViewVisibility(R.id.widget_weather_icon, android.view.View.VISIBLE)
                     } else {
                         views.setViewVisibility(R.id.widget_weather_icon, android.view.View.GONE)
                     }
 
-                    val label = buildString {
-                        if (city.isNotBlank()) append(city)
-                        if (temp.isNotBlank()) {
-                            if (isNotEmpty()) append(" ")
-                            append(temp).append("°")
-                        }
-                    }
-                    views.setTextViewText(R.id.widget_weather, label.ifBlank { text })
+                    // 温度始终显示；没图标时只显示温度
+                    views.setTextViewText(R.id.widget_weather, tempLabel)
+                    views.setViewVisibility(R.id.widget_weather_group, android.view.View.VISIBLE)
                 } else {
-                    views.setViewVisibility(R.id.widget_weather_icon, android.view.View.GONE)
-                    views.setTextViewText(R.id.widget_weather, "")
+                    // 无天气数据：整组隐藏，不占位
+                    views.setViewVisibility(R.id.widget_weather_group, android.view.View.GONE)
                 }
             } catch (_: Exception) {
-                views.setViewVisibility(R.id.widget_weather_icon, android.view.View.GONE)
-                views.setTextViewText(R.id.widget_weather, "")
+                views.setViewVisibility(R.id.widget_weather_group, android.view.View.GONE)
             }
         }
     }

@@ -158,14 +158,21 @@ class SettingsViewModel @Inject constructor(
             // 填了 Key 就自动开启天气，无需额外开关
             val enabled = key.isNotBlank()
             settings.setWeatherEnabled(enabled)
-            if (enabled) WidgetPeriodicWorker.requestImmediate(application)
+            if (enabled) {
+                WidgetPeriodicWorker.requestImmediate(application)
+                // 立即重绘，让已缓存的天气（如果有）马上出现在小组件上
+                refreshWidgets()
+            }
         }
     }
 
     fun setQWeatherHost(host: String) {
         viewModelScope.launch {
             settings.setQweatherHost(host)
-            if (host.isNotBlank()) WidgetPeriodicWorker.requestImmediate(application)
+            if (host.isNotBlank()) {
+                WidgetPeriodicWorker.requestImmediate(application)
+                refreshWidgets()
+            }
         }
     }
 }

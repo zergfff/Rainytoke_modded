@@ -22,7 +22,12 @@
         android:layout_height="0dp"
         android:layout_weight="1" />
 
-    <!-- 时钟/日期/星期/天气行（时间 35sp，其余 30sp，底边对齐） -->
+    <!-- 时钟行：时间 42sp，星期/日期/天气 21sp。
+         时间/星期/日期底边对齐（gravity=bottom），天气图标+温度作为一组靠右。
+         中间用 weight=1 的空白撑开——不能让天气 TextView 自己吃 weight，
+         否则空间紧张时前面的时间/星期/日期会被压缩，看着字号差不大。
+         天气组内部用 center_vertical，只保证图标与温度两者彼此对齐，
+         不要求与整行垂直居中。 -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -58,25 +63,38 @@
                 android:textSize="21sp"
                 android:layout_marginEnd="6dp" />
 
-            <ImageView
-                android:id="@+id/widget_weather_icon"
-                android:layout_width="20dp"
-                android:layout_height="20dp"
-                android:layout_marginEnd="3dp"
-                android:src="@drawable/qw_999"
-                android:visibility="gone" />
-
-            <TextView
-                android:id="@+id/widget_weather"
+            <!-- 弹性空白：把天气组推到最右 -->
+            <LinearLayout
                 android:layout_width="0dp"
+                android:layout_height="0dp"
+                android:layout_weight="1" />
+
+            <!-- 天气组：图标 + 温度，居中对齐，整体靠右 -->
+            <LinearLayout
+                android:id="@+id/widget_weather_group"
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="☀️ 25°C"
-                android:textColor="@color/widget_muted_text"
-                android:textSize="20sp"
-                android:singleLine="true"
-                android:ellipsize="end"
-                android:gravity="end|bottom" />
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:visibility="gone">
+
+                <ImageView
+                    android:id="@+id/widget_weather_icon"
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:layout_marginEnd="3dp"
+                    android:src="@drawable/qw_999" />
+
+                <TextView
+                    android:id="@+id/widget_weather"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="25°"
+                    android:textColor="@color/widget_muted_text"
+                    android:textSize="21sp"
+                    android:singleLine="true"
+                    android:ellipsize="end" />
+            </LinearLayout>
 
     </LinearLayout>
 
