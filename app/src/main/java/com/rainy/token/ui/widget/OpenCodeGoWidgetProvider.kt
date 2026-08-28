@@ -162,7 +162,7 @@ class OpenCodeGoWidgetProvider : AppWidgetProvider() {
                             localized.getString(R.string.widget_updated_at, timeText)
                         )
                     } else {
-                        setEmptyState(views, localized)
+                        setEmptyState(views, localized, selectedService)
                         views.setTextViewText(
                             R.id.widget_service_title,
                             localized.getString(R.string.widget_service_quota, selectedService.displayName)
@@ -170,7 +170,7 @@ class OpenCodeGoWidgetProvider : AppWidgetProvider() {
                     }
 
                 } catch (_: Exception) {
-                    setEmptyState(views, localized)
+                    setEmptyState(views, localized, currentDisplayService(context))
                 }
             }
 
@@ -222,7 +222,7 @@ private fun applyFontScale(views: RemoteViews, context: Context, scale: Float) {
         R.id.widget_weekday to 20f,
         R.id.widget_date to 20f,
         R.id.widget_weather to 20f,
-        R.id.widget_service_title to 11f,
+        R.id.widget_service_title to 14f,
         R.id.widget_updated to 10f,
         R.id.widget_refresh to 20f,
         R.id.widget_ds_label to 14f,
@@ -402,7 +402,7 @@ private fun populateServiceRows(
         views.setColorStateList(barViewId, "setProgressTintList", ColorStateList.valueOf(color.toInt()))
     }
 
-    private fun setEmptyState(views: RemoteViews, context: Context) {
+    private fun setEmptyState(views: RemoteViews, context: Context, service: ServiceType = ServiceType.OPENCODE_GO) {
         views.setTextViewText(R.id.widget_updated, context.getString(R.string.widget_no_data))
         // 空状态也设置行标签（跟随 app 语言，中文显示 本周/本月）
         setRowLabel(
@@ -421,11 +421,19 @@ private fun populateServiceRows(
             views.setTextViewText(resetId, "")
         }
         views.setTextViewText(R.id.widget_ds_amount, "—")
-        // DeepSeek 行默认隐藏（仅 DeepSeek 页显示）
-        views.setViewVisibility(R.id.widget_ds_row, android.view.View.GONE)
-        // 进度条行恢复显示（非 DeepSeek 页）
-        for (rowId in listOf(R.id.row1_row, R.id.row2_row, R.id.row3_row)) {
-            views.setViewVisibility(rowId, android.view.View.VISIBLE)
+
+        // 页面布局完全由当前服务决定（不因缓存缺失而回退）
+        if (service == ServiceType.DEEPSEEK) {
+            // DeepSeek 页：隐藏三个进度条行，只显示余额行
+            for (rowId in listOf(R.id.row1_row, R.id.row2_row, R.id.row3_row)) {
+                views.setViewVisibility(rowId, android.view.View.GONE)
+            }
+            views.setViewVisibility(R.id.widget_ds_row, android.view.View.VISIBLE)
+        } else {
+            views.setViewVisibility(R.id.widget_ds_row, android.view.View.GONE)
+            for (rowId in listOf(R.id.row1_row, R.id.row2_row, R.id.row3_row)) {
+                views.setViewVisibility(rowId, android.view.View.VISIBLE)
+            }
         }
     }
 

@@ -101,7 +101,7 @@
             android:layout_weight="1"
             android:text="@string/widget_title_opencode"
             android:textColor="#8A7A82"
-            android:textSize="11sp"
+            android:textSize="14sp"
             android:maxLines="1"
             android:ellipsize="end" />
 
