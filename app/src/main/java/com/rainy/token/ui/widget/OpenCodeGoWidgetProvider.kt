@@ -249,11 +249,11 @@ class OpenCodeGoWidgetProvider : AppWidgetProvider() {
 private fun applyFontScale(views: RemoteViews, context: Context, scale: Float) {
     // (viewId, XML 里的基准 sp)
     val targets = listOf(
-        // 时间 42sp，星期/日期/天气 21sp
+        // 时间 42sp，天气温度 25sp，星期/日期 15sp
         R.id.widget_time to 42f,
-        R.id.widget_weekday to 21f,
-        R.id.widget_date to 21f,
-        R.id.widget_weather to 21f,
+        R.id.widget_weekday to 15f,
+        R.id.widget_date to 15f,
+        R.id.widget_weather to 25f,
         R.id.widget_service_title to 14f,
         R.id.widget_ds_label to 14f,
         R.id.widget_ds_amount to 15f,
@@ -270,6 +270,12 @@ private fun applyFontScale(views: RemoteViews, context: Context, scale: Float) {
     for ((id, baseSp) in targets) {
         views.setTextViewTextSize(id, TypedValue.COMPLEX_UNIT_SP, baseSp * scale)
     }
+
+    // 天气图标与温度文字等高：sp 会随系统字体缩放变化，dp 不会，
+    // 所以图标尺寸跟随天气文字的 sp 值一起缩放，避免两者高度脱节。
+    val weatherIconSize = 25f * scale
+    views.setViewLayoutWidth(R.id.widget_weather_icon, weatherIconSize, TypedValue.COMPLEX_UNIT_DIP)
+    views.setViewLayoutHeight(R.id.widget_weather_icon, weatherIconSize, TypedValue.COMPLEX_UNIT_DIP)
 
     // 统一三行左侧列宽，保证三个进度条左端纵向对齐
     //（label/pct 若用 wrap_content，"5h" 比"本周/本月"窄，进度条左端会错开）
