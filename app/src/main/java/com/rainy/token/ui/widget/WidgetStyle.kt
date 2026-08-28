@@ -16,8 +16,12 @@ package com.rainy.token.ui.widget
 data class WidgetElementStyle(
     val sizeSp: Float? = null,
     val colorArgb: Int? = null,
-    val textStyle: String = WidgetStyleDefaults.STYLE_NORMAL
-)
+    val textStyle: String? = null
+) {
+    /** 未自定义时回落到元素的默认值（时间默认粗体） */
+    fun styleOrDefault(element: WidgetElement): String =
+        textStyle ?: element.defaultStyle
+}
 
 /**
  * 小组件可自定义样式的元素。
@@ -25,9 +29,15 @@ data class WidgetElementStyle(
  * key 同时作为 DataStore 的存储后缀，改动 key 会让已保存的用户配置失效，
  * 因此不要随意重命名。
  */
-enum class WidgetElement(val key: String, val defaultSizeSp: Float) {
+enum class WidgetElement(
+    val key: String,
+    /** 基准字号（sp）。实际显示 = 基准 × 设置里的"小组件字体大小"倍率 */
+    val defaultSizeSp: Float,
+    /** 默认字体样式。时间为粗体，与上一版外观保持一致 */
+    val defaultStyle: String = WidgetStyleDefaults.STYLE_NORMAL
+) {
     /** 时钟 HH:mm */
-    TIME("time", 42f),
+    TIME("time", 42f, WidgetStyleDefaults.STYLE_BOLD),
 
     /** 星期，如 周五 */
     WEEKDAY("weekday", 15f),

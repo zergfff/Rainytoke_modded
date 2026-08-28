@@ -209,10 +209,10 @@ class OpenCodeGoWidgetProvider : AppWidgetProvider() {
         val dateFmt = SimpleDateFormat("MM/dd", Locale.getDefault()).apply { timeZone = tz }
         val weekdayFmt = SimpleDateFormat("EEE", Locale.getDefault()).apply { timeZone = tz }
 
-        val timeStyle = styles[WidgetElement.TIME]?.textStyle ?: WidgetStyleDefaults.STYLE_NORMAL
-        val dateStyle = styles[WidgetElement.DATE]?.textStyle ?: WidgetStyleDefaults.STYLE_NORMAL
-        val weekStyle = styles[WidgetElement.WEEKDAY]?.textStyle ?: WidgetStyleDefaults.STYLE_NORMAL
-        val weatherStyle = styles[WidgetElement.WEATHER]?.textStyle ?: WidgetStyleDefaults.STYLE_NORMAL
+        val timeStyle = (styles[WidgetElement.TIME] ?: WidgetElementStyle()).styleOrDefault(WidgetElement.TIME)
+        val dateStyle = (styles[WidgetElement.DATE] ?: WidgetElementStyle()).styleOrDefault(WidgetElement.DATE)
+        val weekStyle = (styles[WidgetElement.WEEKDAY] ?: WidgetElementStyle()).styleOrDefault(WidgetElement.WEEKDAY)
+        val weatherStyle = (styles[WidgetElement.WEATHER] ?: WidgetElementStyle()).styleOrDefault(WidgetElement.WEATHER)
 
         // RemoteViews 没有 setTypeface，粗体/斜体只能靠 StyleSpan 包在文本里传递
         views.setTextViewText(
@@ -305,8 +305,11 @@ private fun applyFontScale(
 
     for ((id, element) in targets) {
         val style = styles[element]
-        // 自定义字号是精确值，不再乘整体缩放
-        val size = style?.sizeSp ?: (element.defaultSizeSp * scale)
+        // 自定义字号是该元素的"基准值"，仍然乘整体缩放：
+        // 这样设置里的"小组件字体大小"能统一调节所有元素（含自定义过的），
+        // 逐元素自定义只负责调整彼此之间的相对大小。
+        val baseSize = style?.sizeSp ?: element.defaultSizeSp
+        val size = baseSize * scale
         views.setTextViewTextSize(id, TypedValue.COMPLEX_UNIT_SP, size)
         style?.colorArgb?.let { views.setTextColor(id, it) }
         // 粗体/斜体无法在这里设置（RemoteViews 无 setTypeface），
@@ -315,7 +318,7 @@ private fun applyFontScale(
 
     // 天气图标与温度文字等高：sp 会随系统字体缩放变化，dp 不会，
     // 所以图标尺寸跟随天气文字的 sp 值一起缩放，避免两者高度脱节。
-    val weatherIconSize = styles[WidgetElement.WEATHER]?.sizeSp ?: (25f * scale)
+    val weatherIconSize = (styles[WidgetElement.WEATHER]?.sizeSp ?: 25f) * scale
     views.setViewLayoutWidth(R.id.widget_weather_icon, weatherIconSize, TypedValue.COMPLEX_UNIT_DIP)
     views.setViewLayoutHeight(R.id.widget_weather_icon, weatherIconSize, TypedValue.COMPLEX_UNIT_DIP)
 
@@ -349,9 +352,9 @@ private fun applyFontScale(
     // 字宽（1.0em）更宽，按 2 字算（35dp）会触发 ellipsize 变成"本..."。
     // 这里按 3 个中文字的容量给，留足余量。
     // 行宽必须按各元素最终字号重算，否则自定义字号后仍会换行/截断
-    val labelSp = styles[WidgetElement.ROW_LABEL]?.sizeSp ?: (14f * scale)
-    val pctSp = styles[WidgetElement.PERCENT]?.sizeSp ?: (15f * scale)
-    val resetSp = styles[WidgetElement.RESET]?.sizeSp ?: (13f * scale)
+    val labelSp = (styles[WidgetElement.ROW_LABEL]?.sizeSp ?: 14f) * scale
+    val pctSp = (styles[WidgetElement.PERCENT]?.sizeSp ?: 15f) * scale
+    val resetSp = (styles[WidgetElement.RESET]?.sizeSp ?: 13f) * scale
     val labelW = 3f * labelSp * 1.00f * 1.15f
     val pctW = 4f * pctSp * 0.66f * 1.25f
     // 剩余时间最长是两位数天+两位数小时，如 "11d24h"（6 字符）。

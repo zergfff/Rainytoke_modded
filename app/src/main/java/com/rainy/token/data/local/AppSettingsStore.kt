@@ -128,7 +128,7 @@ class AppSettingsStore @Inject constructor(
         return WidgetElementStyle(
             sizeSp = prefs[Keys.widgetStyleSize(element)],
             colorArgb = prefs[Keys.widgetStyleColor(element)],
-            textStyle = prefs[Keys.widgetStyleTextStyle(element)] ?: WidgetStyleDefaults.STYLE_NORMAL
+            textStyle = prefs[Keys.widgetStyleTextStyle(element)]  // null = 用元素默认值
         )
     }
 
@@ -140,7 +140,8 @@ class AppSettingsStore @Inject constructor(
             if (style.colorArgb == null) prefs.remove(Keys.widgetStyleColor(element))
             else prefs[Keys.widgetStyleColor(element)] = style.colorArgb
 
-            prefs[Keys.widgetStyleTextStyle(element)] = style.textStyle
+            if (style.textStyle == null) prefs.remove(Keys.widgetStyleTextStyle(element))
+            else prefs[Keys.widgetStyleTextStyle(element)] = style.textStyle
         }
     }
 

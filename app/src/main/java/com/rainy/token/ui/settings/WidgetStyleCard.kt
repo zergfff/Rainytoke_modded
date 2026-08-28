@@ -183,7 +183,9 @@ private fun ElementStyleRow(
                 modifier = Modifier.width(32.dp)
             )
             TextStyleRow(
-                selected = style.textStyle,
+                element = element,
+                selected = style.styleOrDefault(element),
+                isCustomized = style.textStyle != null,
                 onSelected = { onStyleChanged(style.copy(textStyle = it)) }
             )
         }
@@ -192,8 +194,25 @@ private fun ElementStyleRow(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun TextStyleRow(selected: String, onSelected: (String) -> Unit) {
+private fun TextStyleRow(
+    element: WidgetElement,
+    selected: String,
+    isCustomized: Boolean,
+    onSelected: (String?) -> Unit
+) {
     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        // 未自定义时额外给一个"默认"选项，点了回到元素自带样式（时间为粗体）
+        if (!isCustomized) {
+            FilterChip(
+                selected = true,
+                onClick = { onSelected(null) },
+                label = { Text("默认") },
+                colors = FilterChipDefaults.filterChipColors(
+                    selectedContainerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
+                    selectedLabelColor = MaterialTheme.colorScheme.primary
+                )
+            )
+        }
         WidgetStyleDefaults.STYLE_OPTIONS.forEach { opt ->
             FilterChip(
                 selected = selected == opt,
