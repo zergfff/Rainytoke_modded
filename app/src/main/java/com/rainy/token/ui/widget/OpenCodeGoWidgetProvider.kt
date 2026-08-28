@@ -282,7 +282,10 @@ private fun applyFontScale(views: RemoteViews, context: Context, scale: Float) {
     //   最宽内容固定为 "100%"(4 字符) 和 "XXdXXh"(6 字符)，不会有更长的。
     // 旧的写死值（label 64dp / pct 38dp / reset 48dp）两头不讨好：
     // label 过宽挤占进度条，pct/reset 又窄到装不下导致换行。
-    val labelW = (2f * 14f * 1.00f * 1.25f) * scale    // 中文 2 字 @14sp
+    // label 实际内容是 "5h" / "本周" / "本月"。中文字形加字距比理论
+    // 字宽（1.0em）更宽，按 2 字算（35dp）会触发 ellipsize 变成"本..."。
+    // 这里按 3 个中文字的容量给，留足余量。
+    val labelW = (3f * 14f * 1.00f * 1.15f) * scale
     val pctW = (4f * 15f * 0.66f * 1.25f) * scale      // "100%" @15sp bold
     val resetW = (6f * 13f * 0.58f * 1.25f) * scale    // "XXdXXh" @13sp
 
