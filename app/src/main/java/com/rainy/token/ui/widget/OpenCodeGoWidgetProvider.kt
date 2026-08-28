@@ -138,8 +138,6 @@ class OpenCodeGoWidgetProvider : AppWidgetProvider() {
                     val dataStore = context.applicationContext.balanceCacheDataStore
                     val cache = BalanceCache(dataStore)
                     val selectedService = currentDisplayService(context)
-                    // DeepSeek 余额标签
-                    views.setTextViewText(R.id.widget_ds_label, localized.getString(R.string.widget_deepseek_balance))
                     views.setTextViewText(
                         R.id.widget_service_title,
                         localized.getString(R.string.widget_service_quota, selectedService.displayName)
@@ -171,15 +169,6 @@ class OpenCodeGoWidgetProvider : AppWidgetProvider() {
                         )
                     }
 
-                    // DeepSeek 余额
-                    val dsCached = cache.get(ServiceType.DEEPSEEK)
-                    if (dsCached != null && dsCached.balance.amount > 0) {
-                        val dsBal = dsCached.balance
-                        val dsText = dsBal.unit + String.format("%.2f", dsBal.amount)
-                        views.setTextViewText(R.id.widget_ds_amount, dsText)
-                    } else {
-                        views.setTextViewText(R.id.widget_ds_amount, "—")
-                    }
                 } catch (_: Exception) {
                     setEmptyState(views, localized)
                 }
@@ -236,17 +225,17 @@ private fun applyFontScale(views: RemoteViews, context: Context, scale: Float) {
         R.id.widget_service_title to 11f,
         R.id.widget_updated to 10f,
         R.id.widget_refresh to 20f,
-        R.id.widget_ds_label to 11f,
-        R.id.widget_ds_amount to 11f,
-        R.id.row1_label to 12f,
-        R.id.row1_pct to 13f,
-        R.id.row1_reset to 11f,
-        R.id.row2_label to 12f,
-        R.id.row2_pct to 13f,
-        R.id.row2_reset to 11f,
-        R.id.row3_label to 12f,
-        R.id.row3_pct to 13f,
-        R.id.row3_reset to 11f
+        R.id.widget_ds_label to 14f,
+        R.id.widget_ds_amount to 15f,
+        R.id.row1_label to 14f,
+        R.id.row1_pct to 15f,
+        R.id.row1_reset to 13f,
+        R.id.row2_label to 14f,
+        R.id.row2_pct to 15f,
+        R.id.row2_reset to 13f,
+        R.id.row3_label to 14f,
+        R.id.row3_pct to 15f,
+        R.id.row3_reset to 13f
     )
     for ((id, baseSp) in targets) {
         views.setTextViewTextSize(id, TypedValue.COMPLEX_UNIT_SP, baseSp * scale)
@@ -259,6 +248,11 @@ private fun populateServiceRows(
         service: ServiceType,
         balance: com.rainy.token.domain.model.ServiceBalance
     ) {
+        // 默认：显示三个进度条行，隐藏 DeepSeek 行
+        for (rowId in listOf(R.id.row1_row, R.id.row2_row, R.id.row3_row)) {
+            views.setViewVisibility(rowId, android.view.View.VISIBLE)
+        }
+        views.setViewVisibility(R.id.widget_ds_row, android.view.View.GONE)
         val extras = balance.extras
         when (service) {
             ServiceType.OPENCODE_GO -> {
@@ -326,7 +320,27 @@ private fun populateServiceRows(
                     populateRow(views, ids.first, ids.second, ids.third, pct = window.second, resetSec = window.third)
                 }
             }
-            ServiceType.DEEPSEEK -> setEmptyState(views, context)
+            ServiceType.DEEPSEEK -> {
+                // DeepSeek 独立页面：无进度条，仅一行余额文字
+                // 隐藏三个进度条行
+                for (id in listOf(R.id.row1_label, R.id.row1_pct, R.id.row1_reset,
+                                  R.id.row2_label, R.id.row2_pct, R.id.row2_reset,
+                                  R.id.row3_label, R.id.row3_pct, R.id.row3_reset)) {
+                    views.setTextViewText(id, "")
+                }
+                for (barId in listOf(R.id.row1_bar, R.id.row2_bar, R.id.row3_bar)) {
+                    views.setViewVisibility(barId, android.view.View.GONE)
+                }
+                for (rowId in listOf(R.id.row1_row, R.id.row2_row, R.id.row3_row)) {
+                    views.setViewVisibility(rowId, android.view.View.GONE)
+                }
+                // 显示 DeepSeek 专属行（单行余额）
+                views.setViewVisibility(R.id.widget_ds_row, android.view.View.VISIBLE)
+                val amount = balance.amount
+                val dsText = if (amount > 0) balance.unit + String.format("%.2f", amount) else "—"
+                views.setTextViewText(R.id.widget_ds_amount, dsText)
+                views.setTextViewText(R.id.widget_ds_label, context.getString(R.string.widget_deepseek_balance))
+            }
             ServiceType.OLLAMA -> {
                 setRowLabel(views, context.getString(R.string.window_5h_short), context.getString(R.string.window_every_week), "")
                 populateRow(views, R.id.row1_pct, R.id.row1_bar, R.id.row1_reset,
@@ -407,6 +421,12 @@ private fun populateServiceRows(
             views.setTextViewText(resetId, "")
         }
         views.setTextViewText(R.id.widget_ds_amount, "—")
+        // DeepSeek 行默认隐藏（仅 DeepSeek 页显示）
+        views.setViewVisibility(R.id.widget_ds_row, android.view.View.GONE)
+        // 进度条行恢复显示（非 DeepSeek 页）
+        for (rowId in listOf(R.id.row1_row, R.id.row2_row, R.id.row3_row)) {
+            views.setViewVisibility(rowId, android.view.View.VISIBLE)
+        }
     }
 
     companion object {
@@ -418,7 +438,7 @@ private fun populateServiceRows(
         private const val KEY_LAST_AUTO_REFRESH = "last_auto_refresh"
         private const val KEY_DISPLAY_SERVICE = "display_service"
         private const val ACTION_SWITCH_SERVICE = "com.rainy.token.action.WIDGET_SWITCH_SERVICE"
-        private val DISPLAY_SERVICES = listOf(ServiceType.OPENCODE_GO, ServiceType.COMMANDCODE_GO, ServiceType.CODEX, ServiceType.OLLAMA)
+        private val DISPLAY_SERVICES = listOf(ServiceType.OPENCODE_GO, ServiceType.COMMANDCODE_GO, ServiceType.CODEX, ServiceType.OLLAMA, ServiceType.DEEPSEEK)
 
         private fun autoRefreshPrefs(context: Context) =
             context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
