@@ -202,13 +202,13 @@ class OpenCodeGoWidgetProvider : AppWidgetProvider() {
         // 星期（跟随系统语言，中文输出"周三"）
         views.setTextViewText(R.id.widget_weekday, weekdayFmt.format(cal.time))
 
-        // 天气（从 AppSettingsStore 读取缓存的城市 + 温度）
+        // 天气（从 AppSettingsStore 读取缓存城市；无缓存时显示默认晴天图标预览）
         val weatherText = runBlocking {
             try {
                 val store = context.applicationContext.appSettingsStore
                 val city = store.weatherCity.first()
-                if (city.isNotBlank()) city else ""
-            } catch (_: Exception) { "" }
+                if (city.isNotBlank()) "☀️ $city" else "☀️ 25°C"
+            } catch (_: Exception) { "☀️ 25°C" }
         }
         views.setTextViewText(R.id.widget_weather, weatherText)
     }
