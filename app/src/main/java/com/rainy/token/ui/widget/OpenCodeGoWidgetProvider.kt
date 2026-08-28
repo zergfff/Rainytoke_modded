@@ -255,12 +255,11 @@ class OpenCodeGoWidgetProvider : AppWidgetProvider() {
 private fun applyFontScale(views: RemoteViews, context: Context, scale: Float) {
     // (viewId, XML 里的基准 sp)
     val targets = listOf(
-        // 时间 42sp，星期/日期/天气 26sp：差距拉大到 ~60%，
-        // 之前 35/30 仅差 17%，小组件尺寸下肉眼几乎看不出层级。
+        // 时间 42sp，星期/日期/天气 21sp
         R.id.widget_time to 42f,
-        R.id.widget_weekday to 26f,
-        R.id.widget_date to 26f,
-        R.id.widget_weather to 26f,
+        R.id.widget_weekday to 21f,
+        R.id.widget_date to 21f,
+        R.id.widget_weather to 21f,
         R.id.widget_service_title to 14f,
         R.id.widget_ds_label to 14f,
         R.id.widget_ds_amount to 15f,
@@ -280,9 +279,19 @@ private fun applyFontScale(views: RemoteViews, context: Context, scale: Float) {
 
     // 统一三行左侧列宽，保证三个进度条左端纵向对齐
     //（label/pct 若用 wrap_content，"5h" 比"本周/本月"窄，进度条左端会错开）
-    val labelW = 44f * scale
-    val pctW = 38f * scale
-    val resetW = 48f * scale
+    //
+    // 宽度必须按"最长可能内容 × 当前字号"来算，不能写死 dp：
+    // 重置时间最长形如 "19d19h"（6 字符），百分比最长 "100%"（4 字符，加粗更宽）。
+    // 之前 pct=38dp / reset=48dp 是固定值，字号一大或内容一长就装不下，
+    // TextView 换行把进度条挤到下一行。
+    // 这里按 字符数 × 字号 × 字符宽度系数 估算，留 25% 余量：
+    //   最宽内容固定为 "100%"(4 字符) 和 "XXdXXh"(6 字符)，不会有更长的。
+    // 旧的写死值（label 64dp / pct 38dp / reset 48dp）两头不讨好：
+    // label 过宽挤占进度条，pct/reset 又窄到装不下导致换行。
+    val labelW = (2f * 14f * 1.00f * 1.25f) * scale    // 中文 2 字 @14sp
+    val pctW = (4f * 15f * 0.66f * 1.25f) * scale      // "100%" @15sp bold
+    val resetW = (6f * 13f * 0.58f * 1.25f) * scale    // "XXdXXh" @13sp
+
     for (id in listOf(R.id.row1_label, R.id.row2_label, R.id.row3_label)) {
         views.setViewLayoutWidth(id, labelW, TypedValue.COMPLEX_UNIT_DIP)
     }

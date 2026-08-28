@@ -45,14 +45,20 @@ class SettingsViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(SettingsUiState())
     val uiState: StateFlow<SettingsUiState> = _uiState.asStateFlow()
 
-    val settingsState: StateFlow<SettingsUiStateData> = kotlinx.coroutines.flow.combine(
+    /**
+     * QWeather API Key 存在加密的 SecureStorage 里，不是 DataStore 的 qweatherKey。
+     * 之前 UI 读的是 DataStore 那个从未被写入的字段，所以输入框永远显示空——
+     * 看着像"填不进去"，实际是写进去了但读不回来。
+     */
+    private val _qweatherKey = MutableStateFlow("")
+
+    private val baseSettings: StateFlow<SettingsUiStateData> = kotlinx.coroutines.flow.combine(
         settings.themeKey,
         settings.appFontScale,
         settings.widgetFontScale,
         settings.widgetRefreshIntervalMin,
         settings.widgetSelectedServices,
         settings.weatherEnabled,
-        settings.qweatherKey,
         settings.qweatherHost
     ) { values: Array<Any> ->
         SettingsUiStateData(
@@ -62,12 +68,20 @@ class SettingsViewModel @Inject constructor(
             widgetRefreshIntervalMin = values[3] as Int,
             widgetSelectedServices = @Suppress("UNCHECKED_CAST") values[4] as Set<String>,
             weatherEnabled = values[5] as Boolean,
-            qweatherKey = values[6] as String,
-            qweatherHost = values[7] as String
+            qweatherHost = values[6] as String
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), SettingsUiStateData())
 
+    val settingsState: StateFlow<SettingsUiStateData> =
+        kotlinx.coroutines.flow.combine(baseSettings, _qweatherKey) { base, key ->
+            base.copy(qweatherKey = key)
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), SettingsUiStateData())
+
     init {
+        // 进入设置页时把已保存的 Key 读出来填进输入框
+        viewModelScope.launch {
+            _qweatherKey.value = secureStorage.getQWeatherKey().orEmpty()
+        }
         refresh()
     }
 
@@ -139,6 +153,8 @@ class SettingsViewModel @Inject constructor(
     fun setQWeatherKey(key: String) {
         viewModelScope.launch {
             secureStorage.setQWeatherKey(key)
+            // 立刻回写到输入框，否则清空后 UI 仍显示旧值
+            _qweatherKey.value = key
             // 填了 Key 就自动开启天气，无需额外开关
             val enabled = key.isNotBlank()
             settings.setWeatherEnabled(enabled)
