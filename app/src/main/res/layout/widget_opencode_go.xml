@@ -136,12 +136,15 @@
         android:layout_marginBottom="3dp">
 
         <TextView android:id="@+id/row1_label"
-            android:layout_width="44dp" android:layout_height="wrap_content"
+            android:layout_width="wrap_content"
+            android:minWidth="30dp"
+            android:layout_marginEnd="4dp" android:layout_height="wrap_content"
             android:maxLines="1" android:ellipsize="end"
             android:text="5h" android:textColor="#8A7A82" android:textSize="11sp" />
 
         <TextView android:id="@+id/row1_pct"
-            android:layout_width="38dp" android:layout_height="wrap_content"
+            android:layout_width="wrap_content"
+            android:minWidth="26dp" android:layout_height="wrap_content"
             android:text="--" android:textColor="#3D2C35" android:textSize="12sp"
             android:textStyle="bold" android:gravity="end" />
 
@@ -153,7 +156,9 @@
             android:progressTint="@color/widget_bar_5h" />
 
         <TextView android:id="@+id/row1_reset"
-            android:layout_width="48dp" android:layout_height="wrap_content"
+            android:layout_width="wrap_content"
+            android:minWidth="34dp"
+            android:layout_marginStart="4dp" android:layout_height="wrap_content"
             android:text="--" android:textColor="#B0A0A7" android:textSize="10sp" />
     </LinearLayout>
 
@@ -166,12 +171,15 @@
         android:layout_marginBottom="3dp">
 
         <TextView android:id="@+id/row2_label"
-            android:layout_width="44dp" android:layout_height="wrap_content"
+            android:layout_width="wrap_content"
+            android:minWidth="30dp"
+            android:layout_marginEnd="4dp" android:layout_height="wrap_content"
             android:maxLines="1" android:ellipsize="end"
             android:text="@string/window_weekly" android:textColor="#8A7A82" android:textSize="11sp" />
 
         <TextView android:id="@+id/row2_pct"
-            android:layout_width="38dp" android:layout_height="wrap_content"
+            android:layout_width="wrap_content"
+            android:minWidth="26dp" android:layout_height="wrap_content"
             android:text="--" android:textColor="#3D2C35" android:textSize="12sp"
             android:textStyle="bold" android:gravity="end" />
 
@@ -183,7 +191,9 @@
             android:progressTint="@color/widget_bar_weekly" />
 
         <TextView android:id="@+id/row2_reset"
-            android:layout_width="48dp" android:layout_height="wrap_content"
+            android:layout_width="wrap_content"
+            android:minWidth="34dp"
+            android:layout_marginStart="4dp" android:layout_height="wrap_content"
             android:text="--" android:textColor="#B0A0A7" android:textSize="10sp" />
     </LinearLayout>
 
@@ -196,12 +206,15 @@
         android:layout_marginBottom="3dp">
 
         <TextView android:id="@+id/row3_label"
-            android:layout_width="44dp" android:layout_height="wrap_content"
+            android:layout_width="wrap_content"
+            android:minWidth="30dp"
+            android:layout_marginEnd="4dp" android:layout_height="wrap_content"
             android:maxLines="1" android:ellipsize="end"
             android:text="@string/window_monthly" android:textColor="#8A7A82" android:textSize="11sp" />
 
         <TextView android:id="@+id/row3_pct"
-            android:layout_width="38dp" android:layout_height="wrap_content"
+            android:layout_width="wrap_content"
+            android:minWidth="26dp" android:layout_height="wrap_content"
             android:text="--" android:textColor="#3D2C35" android:textSize="12sp"
             android:textStyle="bold" android:gravity="end" />
 
@@ -213,7 +226,9 @@
             android:progressTint="@color/widget_bar_monthly" />
 
         <TextView android:id="@+id/row3_reset"
-            android:layout_width="48dp" android:layout_height="wrap_content"
+            android:layout_width="wrap_content"
+            android:minWidth="34dp"
+            android:layout_marginStart="4dp" android:layout_height="wrap_content"
             android:text="--" android:textColor="#B0A0A7" android:textSize="10sp" />
     </LinearLayout>
 

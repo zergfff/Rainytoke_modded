@@ -88,11 +88,19 @@ class OpenCodeGoWidgetProvider : AppWidgetProvider() {
         }
         val accentColor = ThemePresets.primaryColor(themeKey).toArgb()
 
+        // 读取字体缩放（设置页 fontScale：0.85 / 1.0 / 1.15 / 1.3）
+        val fontScale = runBlocking {
+            try { context.applicationContext.appSettingsStore.fontScale.first() } catch (_: Exception) { 1.0f }
+        }.coerceIn(0.5f, 2.5f)
+
         for (widgetId in appWidgetIds) {
             val views = RemoteViews(context.packageName, R.layout.widget_opencode_go)
 
             // ─── 时钟/日期/星期/天气行 ───
             updateClockRow(views, localized)
+
+            // 应用字体缩放（跟随设置页 fontScale）
+            applyFontScale(views, localized, fontScale)
 
             // 时钟行点击 → 打开时钟
             val clockPi = PendingIntent.getActivity(
@@ -213,7 +221,39 @@ class OpenCodeGoWidgetProvider : AppWidgetProvider() {
         views.setTextViewText(R.id.widget_weather, weatherText)
     }
 
-    private fun populateServiceRows(
+    /**
+ * 按 fontScale 缩放小组件内所有文字。
+ * 左右两侧文字用 wrap_content，进度条 weight=1 自动吃掉剩余空间，
+ * 因此字体变大 → 两侧变宽 → 进度条按比例自动缩短。
+ */
+private fun applyFontScale(views: RemoteViews, context: Context, scale: Float) {
+    // (viewId, XML 里的基准 sp)
+    val targets = listOf(
+        R.id.widget_time to 50f,
+        R.id.widget_weekday to 20f,
+        R.id.widget_date to 20f,
+        R.id.widget_weather to 20f,
+        R.id.widget_service_title to 11f,
+        R.id.widget_updated to 10f,
+        R.id.widget_refresh to 20f,
+        R.id.widget_ds_label to 11f,
+        R.id.widget_ds_amount to 11f,
+        R.id.row1_label to 11f,
+        R.id.row1_pct to 12f,
+        R.id.row1_reset to 10f,
+        R.id.row2_label to 11f,
+        R.id.row2_pct to 12f,
+        R.id.row2_reset to 10f,
+        R.id.row3_label to 11f,
+        R.id.row3_pct to 12f,
+        R.id.row3_reset to 10f
+    )
+    for ((id, baseSp) in targets) {
+        views.setTextViewTextSize(id, TypedValue.COMPLEX_UNIT_SP, baseSp * scale)
+    }
+}
+
+private fun populateServiceRows(
         views: RemoteViews,
         context: Context,
         service: ServiceType,
