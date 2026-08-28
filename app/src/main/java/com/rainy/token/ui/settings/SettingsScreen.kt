@@ -44,6 +44,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.runtime.collectAsState
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBar
@@ -176,6 +177,19 @@ fun SettingsScreen(
                         title = stringResource(R.string.title_widget_font_size),
                         currentScale = settingsState.widgetFontScale,
                         onScaleChanged = { viewModel.setWidgetFontScale(it) }
+                    )
+                }
+
+                // 小组件元素样式（字号/颜色/字体 + 背景）
+                item {
+                    val styles by viewModel.widgetStyles.collectAsState()
+                    val bg by viewModel.widgetBackground.collectAsState()
+                    WidgetStyleCard(
+                        styles = styles,
+                        background = bg,
+                        onStyleChanged = viewModel::setWidgetElementStyle,
+                        onBackgroundChanged = viewModel::setWidgetBackground,
+                        onReset = viewModel::resetWidgetStyles
                     )
                 }
 

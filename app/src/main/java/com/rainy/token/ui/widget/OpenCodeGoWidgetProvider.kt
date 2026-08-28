@@ -94,14 +94,22 @@ class OpenCodeGoWidgetProvider : AppWidgetProvider() {
             try { context.applicationContext.appSettingsStore.widgetFontScale.first() } catch (_: Exception) { 1.0f }
         }.coerceIn(0.5f, 2.5f)
 
+        // 元素自定义样式（字号/颜色/字体样式），整体加载一次供各处理论复用
+        val elementStyles: Map<WidgetElement, WidgetElementStyle> = runBlocking {
+            try {
+                val store = context.applicationContext.appSettingsStore
+                WidgetElement.values().associateWith { store.widgetElementStyle(it) }
+            } catch (_: Exception) { emptyMap() }
+        }
+
         for (widgetId in appWidgetIds) {
             val views = RemoteViews(context.packageName, R.layout.widget_opencode_go)
 
             // ─── 时钟/日期/星期/天气行 ───
-            updateClockRow(views, localized)
+            updateClockRow(views, localized, elementStyles)
 
             // 应用字体缩放（跟随设置页 fontScale）
-            applyFontScale(views, localized, fontScale)
+            applyFontScale(views, localized, fontScale, elementStyles)
 
             // 时钟行点击 → 打开时钟
             val clockPi = PendingIntent.getActivity(
@@ -189,7 +197,11 @@ class OpenCodeGoWidgetProvider : AppWidgetProvider() {
     }
 
     /** 更新时钟行：时间、星期、日期、天气 */
-    private fun updateClockRow(views: RemoteViews, context: Context) {
+    private fun updateClockRow(
+        views: RemoteViews,
+        context: Context,
+        styles: Map<WidgetElement, WidgetElementStyle>
+    ) {
         // 显式使用系统默认时区，保证与手机当前时间/时区一致
         val tz = java.util.TimeZone.getDefault()
         val cal = Calendar.getInstance(tz)
@@ -197,11 +209,26 @@ class OpenCodeGoWidgetProvider : AppWidgetProvider() {
         val dateFmt = SimpleDateFormat("MM/dd", Locale.getDefault()).apply { timeZone = tz }
         val weekdayFmt = SimpleDateFormat("EEE", Locale.getDefault()).apply { timeZone = tz }
 
-        views.setTextViewText(R.id.widget_time, timeFmt.format(cal.time))
-        views.setTextViewText(R.id.widget_date, dateFmt.format(cal.time))
+        val timeStyle = styles[WidgetElement.TIME]?.textStyle ?: WidgetStyleDefaults.STYLE_NORMAL
+        val dateStyle = styles[WidgetElement.DATE]?.textStyle ?: WidgetStyleDefaults.STYLE_NORMAL
+        val weekStyle = styles[WidgetElement.WEEKDAY]?.textStyle ?: WidgetStyleDefaults.STYLE_NORMAL
+        val weatherStyle = styles[WidgetElement.WEATHER]?.textStyle ?: WidgetStyleDefaults.STYLE_NORMAL
+
+        // RemoteViews 没有 setTypeface，粗体/斜体只能靠 StyleSpan 包在文本里传递
+        views.setTextViewText(
+            R.id.widget_time,
+            WidgetStyleDefaults.styledText(timeFmt.format(cal.time), timeStyle)
+        )
+        views.setTextViewText(
+            R.id.widget_date,
+            WidgetStyleDefaults.styledText(dateFmt.format(cal.time), dateStyle)
+        )
 
         // 星期（跟随系统语言，中文输出"周三"）
-        views.setTextViewText(R.id.widget_weekday, weekdayFmt.format(cal.time))
+        views.setTextViewText(
+            R.id.widget_weekday,
+            WidgetStyleDefaults.styledText(weekdayFmt.format(cal.time), weekStyle)
+        )
 
         // 天气（只显示图标 + 温度，不显示城市/定位名；整组右对齐）
         runBlocking {
@@ -229,7 +256,10 @@ class OpenCodeGoWidgetProvider : AppWidgetProvider() {
                     }
 
                     // 温度始终显示；没图标时只显示温度
-                    views.setTextViewText(R.id.widget_weather, tempLabel)
+                    views.setTextViewText(
+                        R.id.widget_weather,
+                        WidgetStyleDefaults.styledText(tempLabel, weatherStyle)
+                    )
                     views.setViewVisibility(R.id.widget_weather_group, android.view.View.VISIBLE)
                 } else {
                     // 无天气数据：整组隐藏，不占位
@@ -246,36 +276,63 @@ class OpenCodeGoWidgetProvider : AppWidgetProvider() {
  * 左右两侧文字用 wrap_content，进度条 weight=1 自动吃掉剩余空间，
  * 因此字体变大 → 两侧变宽 → 进度条按比例自动缩短。
  */
-private fun applyFontScale(views: RemoteViews, context: Context, scale: Float) {
-    // (viewId, XML 里的基准 sp)
+private fun applyFontScale(
+    views: RemoteViews,
+    context: Context,
+    scale: Float,
+    styles: Map<WidgetElement, WidgetElementStyle>
+) {
+    // (viewId, 元素枚举)。用户可在设置页为每个元素单独覆盖
+    // 字号 / 颜色 / 字族；未覆盖的用 defaultSizeSp × 整体缩放。
     val targets = listOf(
-        // 时间 42sp，天气温度 25sp，星期/日期 15sp
-        R.id.widget_time to 42f,
-        R.id.widget_weekday to 15f,
-        R.id.widget_date to 15f,
-        R.id.widget_weather to 25f,
-        R.id.widget_service_title to 14f,
-        R.id.widget_ds_label to 14f,
-        R.id.widget_ds_amount to 15f,
-        R.id.row1_label to 14f,
-        R.id.row1_pct to 15f,
-        R.id.row1_reset to 13f,
-        R.id.row2_label to 14f,
-        R.id.row2_pct to 15f,
-        R.id.row2_reset to 13f,
-        R.id.row3_label to 14f,
-        R.id.row3_pct to 15f,
-        R.id.row3_reset to 13f
+        R.id.widget_time to WidgetElement.TIME,
+        R.id.widget_weekday to WidgetElement.WEEKDAY,
+        R.id.widget_date to WidgetElement.DATE,
+        R.id.widget_weather to WidgetElement.WEATHER,
+        R.id.widget_service_title to WidgetElement.TITLE,
+        R.id.row1_label to WidgetElement.ROW_LABEL,
+        R.id.row2_label to WidgetElement.ROW_LABEL,
+        R.id.row3_label to WidgetElement.ROW_LABEL,
+        R.id.row1_pct to WidgetElement.PERCENT,
+        R.id.row2_pct to WidgetElement.PERCENT,
+        R.id.row3_pct to WidgetElement.PERCENT,
+        R.id.row1_reset to WidgetElement.RESET,
+        R.id.row2_reset to WidgetElement.RESET,
+        R.id.row3_reset to WidgetElement.RESET,
+        R.id.widget_ds_label to WidgetElement.TITLE,
+        R.id.widget_ds_amount to WidgetElement.PERCENT
     )
-    for ((id, baseSp) in targets) {
-        views.setTextViewTextSize(id, TypedValue.COMPLEX_UNIT_SP, baseSp * scale)
+
+    for ((id, element) in targets) {
+        val style = styles[element]
+        // 自定义字号是精确值，不再乘整体缩放
+        val size = style?.sizeSp ?: (element.defaultSizeSp * scale)
+        views.setTextViewTextSize(id, TypedValue.COMPLEX_UNIT_SP, size)
+        style?.colorArgb?.let { views.setTextColor(id, it) }
+        // 粗体/斜体无法在这里设置（RemoteViews 无 setTypeface），
+        // 由 applyTextStyles() 在文本设置完成后统一套 StyleSpan。
     }
 
     // 天气图标与温度文字等高：sp 会随系统字体缩放变化，dp 不会，
     // 所以图标尺寸跟随天气文字的 sp 值一起缩放，避免两者高度脱节。
-    val weatherIconSize = 25f * scale
+    val weatherIconSize = styles[WidgetElement.WEATHER]?.sizeSp ?: (25f * scale)
     views.setViewLayoutWidth(R.id.widget_weather_icon, weatherIconSize, TypedValue.COMPLEX_UNIT_DIP)
     views.setViewLayoutHeight(R.id.widget_weather_icon, weatherIconSize, TypedValue.COMPLEX_UNIT_DIP)
+
+    // 背景颜色与透明度
+    val store = context.applicationContext.appSettingsStore
+    val bg = runBlocking {
+        try { store.widgetBackground() } catch (_: Exception) { null to 255 }
+    }
+    val (bgColor, bgAlpha) = bg
+    // 根布局用的是 @android:id/background（MIUI 小组件规范）
+    val rootId = android.R.id.background
+    if (bgColor != null) {
+        val argb = (bgAlpha.coerceIn(0, 255) shl 24) or (bgColor and 0x00FFFFFF)
+        views.setInt(rootId, "setBackgroundColor", argb)
+    } else if (bgAlpha != 255) {
+        views.setInt(rootId, "setBackgroundColor", (bgAlpha shl 24))
+    }
 
     // 统一三行左侧列宽，保证三个进度条左端纵向对齐
     //（label/pct 若用 wrap_content，"5h" 比"本周/本月"窄，进度条左端会错开）
@@ -291,9 +348,17 @@ private fun applyFontScale(views: RemoteViews, context: Context, scale: Float) {
     // label 实际内容是 "5h" / "本周" / "本月"。中文字形加字距比理论
     // 字宽（1.0em）更宽，按 2 字算（35dp）会触发 ellipsize 变成"本..."。
     // 这里按 3 个中文字的容量给，留足余量。
-    val labelW = (3f * 14f * 1.00f * 1.15f) * scale
-    val pctW = (4f * 15f * 0.66f * 1.25f) * scale      // "100%" @15sp bold
-    val resetW = (6f * 13f * 0.58f * 1.25f) * scale    // "XXdXXh" @13sp
+    // 行宽必须按各元素最终字号重算，否则自定义字号后仍会换行/截断
+    val labelSp = styles[WidgetElement.ROW_LABEL]?.sizeSp ?: (14f * scale)
+    val pctSp = styles[WidgetElement.PERCENT]?.sizeSp ?: (15f * scale)
+    val resetSp = styles[WidgetElement.RESET]?.sizeSp ?: (13f * scale)
+    val labelW = 3f * labelSp * 1.00f * 1.15f
+    val pctW = 4f * pctSp * 0.66f * 1.25f
+    // 剩余时间最长是两位数天+两位数小时，如 "11d24h"（6 字符）。
+    // 之前按 6 字符算仍出现 "3h4..." 截断，说明 0.58 的字符宽度系数
+    // 估窄了；改用 0.62 并留 35% 余量，同时 XML 里去掉了 ellipsize，
+    // 剩余时间属于关键信息，宁可挤一点也不能省略。
+    val resetW = 6f * resetSp * 0.62f * 1.35f
 
     for (id in listOf(R.id.row1_label, R.id.row2_label, R.id.row3_label)) {
         views.setViewLayoutWidth(id, labelW, TypedValue.COMPLEX_UNIT_DIP)

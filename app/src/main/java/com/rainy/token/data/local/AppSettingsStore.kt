@@ -12,7 +12,11 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import dagger.hilt.android.qualifiers.ApplicationContext
+import com.rainy.token.ui.widget.WidgetElement
+import com.rainy.token.ui.widget.WidgetElementStyle
+import com.rainy.token.ui.widget.WidgetStyleDefaults
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.flow.map
@@ -52,6 +56,14 @@ class AppSettingsStore @Inject constructor(
         val weatherLatitude = floatPreferencesKey("weather_latitude")
         val weatherLongitude = floatPreferencesKey("weather_longitude")
         val lastWeatherFetchAt = longPreferencesKey("last_weather_fetch_at")
+
+        // ─── 小组件元素自定义样式 ───
+        // 命名：ws_<element>_size / _color / _font
+        val widgetStyleSize = { e: WidgetElement -> floatPreferencesKey("ws_${e.key}_size") }
+        val widgetStyleColor = { e: WidgetElement -> intPreferencesKey("ws_${e.key}_color") }
+        val widgetStyleTextStyle = { e: WidgetElement -> stringPreferencesKey("ws_${e.key}_style") }
+        val widgetBgColor = intPreferencesKey("ws_bg_color")
+        val widgetBgAlpha = intPreferencesKey("ws_bg_alpha")
     }
 
     // ─── Flows ───
@@ -106,6 +118,58 @@ class AppSettingsStore @Inject constructor(
 
     suspend fun setQweatherHost(value: String) {
         ds.edit { it[Keys.qweatherHost] = value }
+    }
+
+    // ─── 小组件元素样式 ───
+
+    /** 单个元素的样式；未配置过的项返回默认值 */
+    suspend fun widgetElementStyle(element: WidgetElement): WidgetElementStyle {
+        val prefs = ds.data.first()
+        return WidgetElementStyle(
+            sizeSp = prefs[Keys.widgetStyleSize(element)],
+            colorArgb = prefs[Keys.widgetStyleColor(element)],
+            textStyle = prefs[Keys.widgetStyleTextStyle(element)] ?: WidgetStyleDefaults.STYLE_NORMAL
+        )
+    }
+
+    suspend fun setWidgetElementStyle(element: WidgetElement, style: WidgetElementStyle) {
+        ds.edit { prefs ->
+            if (style.sizeSp == null) prefs.remove(Keys.widgetStyleSize(element))
+            else prefs[Keys.widgetStyleSize(element)] = style.sizeSp
+
+            if (style.colorArgb == null) prefs.remove(Keys.widgetStyleColor(element))
+            else prefs[Keys.widgetStyleColor(element)] = style.colorArgb
+
+            prefs[Keys.widgetStyleTextStyle(element)] = style.textStyle
+        }
+    }
+
+    /** 小组件背景：颜色 ARGB 与透明度（0~255） */
+    suspend fun widgetBackground(): Pair<Int?, Int> {
+        val prefs = ds.data.first()
+        return prefs[Keys.widgetBgColor] to
+            (prefs[Keys.widgetBgAlpha] ?: WidgetStyleDefaults.BG_ALPHA_DEFAULT)
+    }
+
+    suspend fun setWidgetBackground(colorArgb: Int?, alpha: Int) {
+        ds.edit { prefs ->
+            if (colorArgb == null) prefs.remove(Keys.widgetBgColor)
+            else prefs[Keys.widgetBgColor] = colorArgb
+            prefs[Keys.widgetBgAlpha] = alpha.coerceIn(0, 255)
+        }
+    }
+
+    /** 清空所有自定义样式，恢复默认 */
+    suspend fun resetWidgetStyles() {
+        ds.edit { prefs ->
+            WidgetElement.values().forEach { e ->
+                prefs.remove(Keys.widgetStyleSize(e))
+                prefs.remove(Keys.widgetStyleColor(e))
+                prefs.remove(Keys.widgetStyleTextStyle(e))
+            }
+            prefs.remove(Keys.widgetBgColor)
+            prefs.remove(Keys.widgetBgAlpha)
+        }
     }
 
     suspend fun setWeatherCity(value: String) {

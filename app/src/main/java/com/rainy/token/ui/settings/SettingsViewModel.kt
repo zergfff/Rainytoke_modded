@@ -9,6 +9,8 @@ import com.rainy.token.data.local.SecureStorage
 import com.rainy.token.data.repository.CredentialRepository
 import com.rainy.token.domain.model.CredentialStatus
 import com.rainy.token.ui.widget.OpenCodeGoWidgetProvider
+import com.rainy.token.ui.widget.WidgetElement
+import com.rainy.token.ui.widget.WidgetElementStyle
 import com.rainy.token.ui.widget.WidgetPeriodicWorker
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -77,11 +79,24 @@ class SettingsViewModel @Inject constructor(
             base.copy(qweatherKey = key)
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), SettingsUiStateData())
 
+    /**
+     * 元素 → 样式。
+     * 声明必须在 init 之前：Kotlin 按声明顺序初始化属性，若放在类末尾，
+     * init 里的 loadWidgetStyles() 会拿到 null 而崩溃。
+     */
+    private val _widgetStyles = MutableStateFlow<Map<WidgetElement, WidgetElementStyle>>(emptyMap())
+    val widgetStyles: StateFlow<Map<WidgetElement, WidgetElementStyle>> = _widgetStyles.asStateFlow()
+
+    /** 背景：颜色（null=默认）与透明度 0~255 */
+    private val _widgetBackground = MutableStateFlow<Pair<Int?, Int>>(null to 255)
+    val widgetBackground: StateFlow<Pair<Int?, Int>> = _widgetBackground.asStateFlow()
+
     init {
         // 进入设置页时把已保存的 Key 读出来填进输入框
         viewModelScope.launch {
             _qweatherKey.value = secureStorage.getQWeatherKey().orEmpty()
         }
+        loadWidgetStyles()
         refresh()
     }
 
@@ -173,6 +188,40 @@ class SettingsViewModel @Inject constructor(
                 WidgetPeriodicWorker.requestImmediate(application)
                 refreshWidgets()
             }
+        }
+    }
+
+    // ─── 小组件元素样式 ───
+
+    private fun loadWidgetStyles() {
+        viewModelScope.launch {
+            _widgetStyles.value =
+                WidgetElement.values().associateWith { settings.widgetElementStyle(it) }
+            _widgetBackground.value = settings.widgetBackground()
+        }
+    }
+
+    fun setWidgetElementStyle(element: WidgetElement, style: WidgetElementStyle) {
+        viewModelScope.launch {
+            settings.setWidgetElementStyle(element, style)
+            _widgetStyles.value = _widgetStyles.value.toMutableMap().apply { put(element, style) }
+            refreshWidgets()
+        }
+    }
+
+    fun setWidgetBackground(colorArgb: Int?, alpha: Int) {
+        viewModelScope.launch {
+            settings.setWidgetBackground(colorArgb, alpha)
+            _widgetBackground.value = colorArgb to alpha
+            refreshWidgets()
+        }
+    }
+
+    fun resetWidgetStyles() {
+        viewModelScope.launch {
+            settings.resetWidgetStyles()
+            loadWidgetStyles()
+            refreshWidgets()
         }
     }
 }

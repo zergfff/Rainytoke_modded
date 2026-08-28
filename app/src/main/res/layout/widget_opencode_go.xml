@@ -2,6 +2,7 @@
 <!-- MIUI Widget 布局规范：根布局必须为 FrameLayout + @android:id/background -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@android:id/background"
+    android:tag="widget_root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@drawable/widget_bg">
@@ -167,9 +168,9 @@
 
         <TextView android:id="@+id/row1_reset"
             android:layout_width="wrap_content"
-            android:minWidth="34dp"
+            android:minWidth="48dp"
             android:layout_marginStart="4dp" android:layout_height="wrap_content"
-            android:maxLines="1" android:ellipsize="end"
+            android:maxLines="1"
             android:text="--" android:textColor="@color/widget_secondary_text" android:textSize="13sp" />
     </LinearLayout>
 
@@ -205,9 +206,9 @@
 
         <TextView android:id="@+id/row2_reset"
             android:layout_width="wrap_content"
-            android:minWidth="34dp"
+            android:minWidth="48dp"
             android:layout_marginStart="4dp" android:layout_height="wrap_content"
-            android:maxLines="1" android:ellipsize="end"
+            android:maxLines="1"
             android:text="--" android:textColor="@color/widget_secondary_text" android:textSize="13sp" />
     </LinearLayout>
 
@@ -243,9 +244,9 @@
 
         <TextView android:id="@+id/row3_reset"
             android:layout_width="wrap_content"
-            android:minWidth="34dp"
+            android:minWidth="48dp"
             android:layout_marginStart="4dp" android:layout_height="wrap_content"
-            android:maxLines="1" android:ellipsize="end"
+            android:maxLines="1"
             android:text="--" android:textColor="@color/widget_secondary_text" android:textSize="13sp" />
     </LinearLayout>
 
