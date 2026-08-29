@@ -18,7 +18,17 @@ enum class ServiceType(
     COMMANDCODE_GO("CommandCode GOAT", "commandcode_go"),
     DEEPSEEK("DeepSeek", "deepseek"),
     CODEX("Codex / ChatGPT", "codex"),
-    OLLAMA("Ollama", "ollama");
+    OLLAMA("Ollama", "ollama"),
+
+    // ─── 新增：Coding Plan 余量监测 ───
+    /** 智谱 GLM Coding Plan（z.ai 国际 / bigmodel.cn 国内） */
+    ZAI_GLM("GLM Coding Plan", "zai_glm"),
+
+    /** Moonshot Kimi Code（API Key 模式） */
+    KIMI("Kimi Code", "kimi"),
+
+    /** 小米 MiMo Token Plan（浏览器 Cookie 模式） */
+    MIMO("Xiaomi MiMo", "mimo");
 
     companion object {
         fun fromStorageKey(key: String): ServiceType? =

@@ -207,7 +207,12 @@ class CredentialEditViewModel @Inject constructor(
 
     fun testAndSaveApiKey() {
         val type = serviceType ?: return
-        if (type != ServiceType.DEEPSEEK && type != ServiceType.COMMANDCODE_GO && type != ServiceType.CODEX) {
+        if (type != ServiceType.DEEPSEEK &&
+            type != ServiceType.COMMANDCODE_GO &&
+            type != ServiceType.CODEX &&
+            type != ServiceType.ZAI_GLM &&
+            type != ServiceType.KIMI
+        ) {
             _uiState.update { it.copy(message = UiText.Resource(R.string.error_test_not_supported)) }
             return
         }

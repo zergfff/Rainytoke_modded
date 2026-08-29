@@ -412,7 +412,12 @@ private fun populateServiceRows(
                     pct = extras["monthly.pct"]?.toFloatOrNull()?.roundToInt(),
                     resetSec = extras["monthly.resetInSec"]?.toLongOrNull())
             }
-            ServiceType.COMMANDCODE_GO -> {
+            // 新增的 Coding Plan 服务（GLM / Kimi / MiMo）与 CommandCode Go 一样，
+            // 都是 "*.used / *.cap / *.resetInSec" 的通用窗口格式，共用同一分支。
+            ServiceType.COMMANDCODE_GO,
+            ServiceType.ZAI_GLM,
+            ServiceType.KIMI,
+            ServiceType.MIMO -> {
                 fun calcPct(used: Double?, cap: Double?): Int? {
                     if (used == null || cap == null || cap <= 0) return null
                     return ((used / cap) * 100).toInt().coerceIn(0, 100)
@@ -596,7 +601,16 @@ private fun populateServiceRows(
         private const val KEY_LAST_AUTO_REFRESH = "last_auto_refresh"
         private const val KEY_DISPLAY_SERVICE = "display_service"
         private const val ACTION_SWITCH_SERVICE = "com.rainy.token.action.WIDGET_SWITCH_SERVICE"
-        private val DISPLAY_SERVICES = listOf(ServiceType.OPENCODE_GO, ServiceType.COMMANDCODE_GO, ServiceType.CODEX, ServiceType.OLLAMA, ServiceType.DEEPSEEK)
+        private val DISPLAY_SERVICES = listOf(
+            ServiceType.OPENCODE_GO,
+            ServiceType.COMMANDCODE_GO,
+            ServiceType.CODEX,
+            ServiceType.OLLAMA,
+            ServiceType.DEEPSEEK,
+            ServiceType.ZAI_GLM,
+            ServiceType.KIMI,
+            ServiceType.MIMO
+        )
 
         private fun autoRefreshPrefs(context: Context) =
             context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -661,6 +675,9 @@ private fun populateServiceRows(
             ServiceType.CODEX -> "Codex"
             ServiceType.DEEPSEEK -> "DS"
             ServiceType.OLLAMA -> "Ollama"
+            ServiceType.ZAI_GLM -> "GLM"
+            ServiceType.KIMI -> "Kimi"
+            ServiceType.MIMO -> "MiMo"
         }
 
         private fun widgetLogo(service: ServiceType): Int = when (service) {
@@ -669,6 +686,10 @@ private fun populateServiceRows(
             ServiceType.CODEX -> R.drawable.ic_codex_logo_widget
             ServiceType.DEEPSEEK -> R.drawable.ic_deepseek_logo
             ServiceType.OLLAMA -> R.drawable.ic_ollama_logo_widget
+            // 暂无专属图标，复用通用占位（CommandCode 的图标风格接近中性）
+            ServiceType.ZAI_GLM,
+            ServiceType.KIMI,
+            ServiceType.MIMO -> R.drawable.ic_commandcode_logo_widget
         }
 
         fun notifyDataChanged(context: Context) {

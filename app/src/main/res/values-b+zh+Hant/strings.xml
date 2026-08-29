@@ -592,4 +592,7 @@
     <string name="title_app_font_size">APP 界面字体大小</string>
     <string name="title_widget_font_size">小组件字体大小</string>
     <string name="weather_host_required">必须填写 API Host——公共域名已于 2026 年停用。请在和风天气控制台「设置」中查看你的专属 Host。</string>
+    <string name="service_desc_zai_glm">JSON API · 配額視窗</string>
+    <string name="service_desc_kimi">JSON API · Coding 配額</string>
+    <string name="service_desc_mimo">Cookie 抓取 · Token 方案</string>
 </resources>

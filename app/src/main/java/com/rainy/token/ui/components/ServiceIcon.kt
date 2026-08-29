@@ -52,7 +52,11 @@ fun ServiceIcon(
                 )
             }
         }
-        ServiceType.COMMANDCODE_GO -> {
+        // 暂无专属图标的新服务（GLM / Kimi / MiMo）复用 CommandCode 的占位样式
+        ServiceType.COMMANDCODE_GO,
+        ServiceType.ZAI_GLM,
+        ServiceType.KIMI,
+        ServiceType.MIMO -> {
             Box(
                 modifier = modifier
                     .size(size.dp)
@@ -62,7 +66,7 @@ fun ServiceIcon(
             ) {
                 Image(
                     painter = painterResource(id = R.drawable.ic_commandcode_logo_widget),
-                    contentDescription = "CommandCode GOAT",
+                    contentDescription = service.displayName,
                     modifier = Modifier.size((size * 0.85).dp)
                 )
             }

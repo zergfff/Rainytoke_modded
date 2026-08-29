@@ -175,7 +175,13 @@ fun ServiceDetailScreen(
                 }
                 ServiceType.CODEX -> {
                 item { CodexUsageCard(uiState.state) }
-            }
+                }
+                ServiceType.ZAI_GLM,
+                ServiceType.KIMI,
+                ServiceType.MIMO -> {
+                    // 这三个返回的都是通用窗口（5h / 周 / 月），复用 CommandCode 的展示卡
+                    item { CommandCodeGoUsageCard(uiState.state) }
+                }
                 ServiceType.OLLAMA -> {
                     item { OllamaUsageCard(uiState.state) }
                 }
@@ -1157,6 +1163,9 @@ private fun mainCardLabel(service: ServiceType): String = when (service) {
     ServiceType.COMMANDCODE_GO -> stringResource(R.string.main_card_monthly_balance)
     ServiceType.CODEX -> stringResource(R.string.window_usage)
     ServiceType.OLLAMA -> stringResource(R.string.main_card_session_usage)
+    ServiceType.ZAI_GLM,
+    ServiceType.KIMI,
+    ServiceType.MIMO -> stringResource(R.string.main_card_monthly_balance)
 }
 
 private fun stateToChip(state: State): StatusStyle = when (state) {

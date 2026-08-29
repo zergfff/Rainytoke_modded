@@ -599,4 +599,7 @@
     <string name="title_app_font_size">App UI font size</string>
     <string name="title_widget_font_size">Widget font size</string>
     <string name="weather_host_required">API Host is required — public domains were retired in 2026. Find yours in QWeather Console → Settings.</string>
+    <string name="service_desc_zai_glm">JSON API · Quota windows</string>
+    <string name="service_desc_kimi">JSON API · Coding quota</string>
+    <string name="service_desc_mimo">Cookie fetch · Token plan</string>
 </resources>

@@ -66,6 +66,28 @@ object ServiceConfigProvider {
             method = FetchMethod.WEBVIEW_SCRAPER,
             loginUrl = "https://ollama.com/settings",
             displayUnit = "%"
+        ),
+
+        // ─── Coding Plan 余量监测（API 移植自 CodexBar，端点与鉴权方式逐个核对过）───
+
+        ServiceType.ZAI_GLM to ServiceConfig(
+            type = ServiceType.ZAI_GLM,
+            method = FetchMethod.REST_API,
+            loginUrl = "",
+            displayUnit = "%"
+        ),
+        ServiceType.KIMI to ServiceConfig(
+            type = ServiceType.KIMI,
+            method = FetchMethod.REST_API,
+            loginUrl = "",
+            displayUnit = "%"
+        ),
+        ServiceType.MIMO to ServiceConfig(
+            type = ServiceType.MIMO,
+            // 需要浏览器 Cookie，与 OpenCode Go 同一套路
+            method = FetchMethod.WEBVIEW_SCRAPER,
+            loginUrl = "https://platform.xiaomimimo.com",
+            displayUnit = "%"
         )
     )
 

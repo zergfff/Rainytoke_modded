@@ -65,6 +65,7 @@ class AppSettingsStore @Inject constructor(
         val widgetBgColor = intPreferencesKey("ws_bg_color")
         val widgetBgAlpha = intPreferencesKey("ws_bg_alpha")
         val lastWidgetRefreshAt = longPreferencesKey("last_widget_refresh_at")
+        val zaiRegion = stringPreferencesKey("zai_region")
     }
 
     // ─── Flows ───
@@ -166,6 +167,22 @@ class AppSettingsStore @Inject constructor(
 
     suspend fun setLastWidgetRefreshAt(value: Long) {
         ds.edit { it[Keys.lastWidgetRefreshAt] = value }
+    }
+
+    // ─── GLM Coding Plan 区域 ───
+
+    /** GLM / z.ai 的 API 区域：国内 open.bigmodel.cn 或国际 api.z.ai */
+    suspend fun zaiBaseUrl(): String =
+        ds.data.map { it[Keys.zaiRegion] }.first()
+            ?: ZaiRegion.BIGMODEL_CN.baseUrl
+
+    suspend fun setZaiRegion(region: ZaiRegion) {
+        ds.edit { it[Keys.zaiRegion] = region.baseUrl }
+    }
+
+    enum class ZaiRegion(val baseUrl: String, val label: String) {
+        BIGMODEL_CN("https://open.bigmodel.cn", "BigModel 国内"),
+        GLOBAL("https://api.z.ai", "z.ai 国际")
     }
 
     /** 清空所有自定义样式，恢复默认 */

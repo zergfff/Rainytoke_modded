@@ -2,6 +2,9 @@ package com.rainy.token.domain.usecase
 
 import com.rainy.token.data.repository.CodexRepository
 import com.rainy.token.data.repository.CommandCodeGoRepository
+import com.rainy.token.data.repository.KimiRepository
+import com.rainy.token.data.repository.MiMoRepository
+import com.rainy.token.data.repository.ZaiGlmRepository
 import com.rainy.token.data.repository.CredentialRepository
 import com.rainy.token.data.repository.DeepSeekRepository
 import com.rainy.token.data.repository.OllamaRepository
@@ -30,7 +33,10 @@ class RefreshBalanceUseCase @Inject constructor(
     private val openCodeGoRepositoryProvider: Provider<OpenCodeGoRepository>,
     private val commandCodeGoRepositoryProvider: Provider<CommandCodeGoRepository>,
     private val codexRepositoryProvider: Provider<CodexRepository>,
-    private val ollamaRepositoryProvider: Provider<OllamaRepository>
+    private val ollamaRepositoryProvider: Provider<OllamaRepository>,
+    private val zaiGlmRepositoryProvider: Provider<ZaiGlmRepository>,
+    private val kimiRepositoryProvider: Provider<KimiRepository>,
+    private val mimoRepositoryProvider: Provider<MiMoRepository>
 ) {
     suspend operator fun invoke(service: ServiceType): Result<ServiceBalance> =
         withCredentialSession(service) {
@@ -49,6 +55,15 @@ class RefreshBalanceUseCase @Inject constructor(
                 }
                 ServiceType.OLLAMA -> retryOnTransientError {
                     ollamaRepositoryProvider.get().fetchBalance()
+                }
+                ServiceType.ZAI_GLM -> retryOnTransientError {
+                    zaiGlmRepositoryProvider.get().fetchBalance()
+                }
+                ServiceType.KIMI -> retryOnTransientError {
+                    kimiRepositoryProvider.get().fetchBalance()
+                }
+                ServiceType.MIMO -> retryOnTransientError {
+                    mimoRepositoryProvider.get().fetchBalance()
                 }
             }
         }

@@ -592,4 +592,7 @@
     <string name="weather_qweather_host_hint">abc123.def.qweatherapi.com</string>
     <string name="weather_qweather_host_note">在和风天气控制台「设置」中查看你的专属 API Host。公共域名已于 2026 年停用，必须填写此项。</string>
     <string name="refresh_interval">每 %1$d 分钟</string>
+    <string name="service_desc_zai_glm">JSON API · 配额窗口</string>
+    <string name="service_desc_kimi">JSON API · Coding 配额</string>
+    <string name="service_desc_mimo">Cookie 抓取 · Token 套餐</string>
 </resources>

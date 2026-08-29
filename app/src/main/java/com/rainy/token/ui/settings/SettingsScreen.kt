@@ -385,7 +385,10 @@ private fun WidgetServicesCard(
         ServiceType.COMMANDCODE_GO to ServiceType.COMMANDCODE_GO.displayName,
         ServiceType.CODEX to ServiceType.CODEX.displayName,
         ServiceType.DEEPSEEK to ServiceType.DEEPSEEK.displayName,
-        ServiceType.OLLAMA to ServiceType.OLLAMA.displayName
+        ServiceType.OLLAMA to ServiceType.OLLAMA.displayName,
+        ServiceType.ZAI_GLM to ServiceType.ZAI_GLM.displayName,
+        ServiceType.KIMI to ServiceType.KIMI.displayName,
+        ServiceType.MIMO to ServiceType.MIMO.displayName
     )
     Card(
         modifier = Modifier.fillMaxWidth(),

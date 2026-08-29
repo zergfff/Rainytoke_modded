@@ -555,6 +555,10 @@ internal fun secondaryLineRes(card: DashboardCardUi): Int = when (card.service) 
     ServiceType.COMMANDCODE_GO -> R.string.service_desc_commandcode_go
     ServiceType.CODEX -> R.string.service_desc_codex
     ServiceType.OLLAMA -> R.string.service_desc_ollama
+    // 新接入的 Coding Plan 服务
+    ServiceType.ZAI_GLM -> R.string.service_desc_zai_glm
+    ServiceType.KIMI -> R.string.service_desc_kimi
+    ServiceType.MIMO -> R.string.service_desc_mimo
 }
 
 /**
