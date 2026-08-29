@@ -66,6 +66,8 @@ class AppSettingsStore @Inject constructor(
         val widgetBgAlpha = intPreferencesKey("ws_bg_alpha")
         val lastWidgetRefreshAt = longPreferencesKey("last_widget_refresh_at")
         val zaiRegion = stringPreferencesKey("zai_region")
+        val minimaxApiBase = stringPreferencesKey("minimax_api_base")
+        val alibabaHost = stringPreferencesKey("alibaba_host")
     }
 
     // ─── Flows ───
@@ -183,6 +185,36 @@ class AppSettingsStore @Inject constructor(
     enum class ZaiRegion(val baseUrl: String, val label: String) {
         BIGMODEL_CN("https://open.bigmodel.cn", "BigModel 国内"),
         GLOBAL("https://api.z.ai", "z.ai 国际")
+    }
+
+    // ─── MiniMax 区域 ───
+
+    suspend fun minimaxApiBaseUrl(): String =
+        ds.data.map { it[Keys.minimaxApiBase] }.first()
+            ?: MiniMaxRegion.CHINA.apiBaseUrl
+
+    suspend fun setMiniMaxRegion(region: MiniMaxRegion) {
+        ds.edit { it[Keys.minimaxApiBase] = region.apiBaseUrl }
+    }
+
+    enum class MiniMaxRegion(val apiBaseUrl: String, val label: String) {
+        CHINA("https://api.minimaxi.com", "国内"),
+        GLOBAL("https://api.minimax.io", "国际")
+    }
+
+    // ─── 阿里云区域 ───
+
+    suspend fun alibabaHost(): String =
+        ds.data.map { it[Keys.alibabaHost] }.first()
+            ?: AlibabaRegion.CHINA.host
+
+    suspend fun setAlibabaRegion(region: AlibabaRegion) {
+        ds.edit { it[Keys.alibabaHost] = region.host }
+    }
+
+    enum class AlibabaRegion(val host: String, val label: String) {
+        CHINA("https://bailian.console.aliyun.com", "国内百炼"),
+        INTL("https://modelstudio.console.alibabacloud.com", "国际")
     }
 
     /** 清空所有自定义样式，恢复默认 */

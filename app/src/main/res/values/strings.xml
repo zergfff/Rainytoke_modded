@@ -602,4 +602,6 @@
     <string name="service_desc_zai_glm">JSON API · Quota windows</string>
     <string name="service_desc_kimi">JSON API · Coding quota</string>
     <string name="service_desc_mimo">Cookie fetch · Token plan</string>
+    <string name="service_desc_minimax">JSON API · Coding plan</string>
+    <string name="service_desc_alibaba">RPC · Coding plan quota</string>
 </resources>

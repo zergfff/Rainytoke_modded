@@ -88,6 +88,19 @@ object ServiceConfigProvider {
             method = FetchMethod.WEBVIEW_SCRAPER,
             loginUrl = "https://platform.xiaomimimo.com",
             displayUnit = "%"
+        ),
+
+        ServiceType.MINIMAX to ServiceConfig(
+            type = ServiceType.MINIMAX,
+            method = FetchMethod.REST_API,
+            loginUrl = "",
+            displayUnit = "%"
+        ),
+        ServiceType.ALIBABA to ServiceConfig(
+            type = ServiceType.ALIBABA,
+            method = FetchMethod.REST_API,
+            loginUrl = "",
+            displayUnit = "%"
         )
     )
 

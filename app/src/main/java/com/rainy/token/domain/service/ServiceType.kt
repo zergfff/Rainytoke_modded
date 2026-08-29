@@ -28,7 +28,13 @@ enum class ServiceType(
     KIMI("Kimi Code", "kimi"),
 
     /** 小米 MiMo Token Plan（浏览器 Cookie 模式） */
-    MIMO("Xiaomi MiMo", "mimo");
+    MIMO("Xiaomi MiMo", "mimo"),
+
+    /** MiniMax Coding Plan（API Token 优先，Cookie 兜底） */
+    MINIMAX("MiniMax", "minimax"),
+
+    /** 阿里云百炼 Coding Plan（API Key 模式，POST /data/api.json） */
+    ALIBABA("阿里云百炼", "alibaba");
 
     companion object {
         fun fromStorageKey(key: String): ServiceType? =

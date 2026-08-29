@@ -595,4 +595,6 @@
     <string name="service_desc_zai_glm">JSON API · 配额窗口</string>
     <string name="service_desc_kimi">JSON API · Coding 配额</string>
     <string name="service_desc_mimo">Cookie 抓取 · Token 套餐</string>
+    <string name="service_desc_minimax">JSON API · Coding 套餐</string>
+    <string name="service_desc_alibaba">RPC · Coding Plan 配额</string>
 </resources>

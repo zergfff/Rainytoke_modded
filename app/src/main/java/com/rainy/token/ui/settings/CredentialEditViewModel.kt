@@ -211,7 +211,9 @@ class CredentialEditViewModel @Inject constructor(
             type != ServiceType.COMMANDCODE_GO &&
             type != ServiceType.CODEX &&
             type != ServiceType.ZAI_GLM &&
-            type != ServiceType.KIMI
+            type != ServiceType.KIMI &&
+            type != ServiceType.MINIMAX &&
+            type != ServiceType.ALIBABA
         ) {
             _uiState.update { it.copy(message = UiText.Resource(R.string.error_test_not_supported)) }
             return

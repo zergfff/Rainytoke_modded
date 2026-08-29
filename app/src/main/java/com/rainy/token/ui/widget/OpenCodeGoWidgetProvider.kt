@@ -417,7 +417,9 @@ private fun populateServiceRows(
             ServiceType.COMMANDCODE_GO,
             ServiceType.ZAI_GLM,
             ServiceType.KIMI,
-            ServiceType.MIMO -> {
+            ServiceType.MIMO,
+            ServiceType.MINIMAX,
+            ServiceType.ALIBABA -> {
                 fun calcPct(used: Double?, cap: Double?): Int? {
                     if (used == null || cap == null || cap <= 0) return null
                     return ((used / cap) * 100).toInt().coerceIn(0, 100)
@@ -609,7 +611,9 @@ private fun populateServiceRows(
             ServiceType.DEEPSEEK,
             ServiceType.ZAI_GLM,
             ServiceType.KIMI,
-            ServiceType.MIMO
+            ServiceType.MIMO,
+            ServiceType.MINIMAX,
+            ServiceType.ALIBABA
         )
 
         private fun autoRefreshPrefs(context: Context) =
@@ -678,6 +682,8 @@ private fun populateServiceRows(
             ServiceType.ZAI_GLM -> "GLM"
             ServiceType.KIMI -> "Kimi"
             ServiceType.MIMO -> "MiMo"
+            ServiceType.MINIMAX -> "MiniMax"
+            ServiceType.ALIBABA -> "阿里云"
         }
 
         private fun widgetLogo(service: ServiceType): Int = when (service) {
@@ -686,10 +692,11 @@ private fun populateServiceRows(
             ServiceType.CODEX -> R.drawable.ic_codex_logo_widget
             ServiceType.DEEPSEEK -> R.drawable.ic_deepseek_logo
             ServiceType.OLLAMA -> R.drawable.ic_ollama_logo_widget
-            // 暂无专属图标，复用通用占位（CommandCode 的图标风格接近中性）
-            ServiceType.ZAI_GLM,
-            ServiceType.KIMI,
-            ServiceType.MIMO -> R.drawable.ic_commandcode_logo_widget
+            ServiceType.ZAI_GLM -> R.drawable.ic_glm_logo
+            ServiceType.KIMI -> R.drawable.ic_kimi_logo
+            ServiceType.MIMO -> R.drawable.ic_mimo_logo
+            ServiceType.MINIMAX -> R.drawable.ic_minimax_logo
+            ServiceType.ALIBABA -> R.drawable.ic_alibaba_logo
         }
 
         fun notifyDataChanged(context: Context) {

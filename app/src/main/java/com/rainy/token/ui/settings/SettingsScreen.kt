@@ -388,7 +388,9 @@ private fun WidgetServicesCard(
         ServiceType.OLLAMA to ServiceType.OLLAMA.displayName,
         ServiceType.ZAI_GLM to ServiceType.ZAI_GLM.displayName,
         ServiceType.KIMI to ServiceType.KIMI.displayName,
-        ServiceType.MIMO to ServiceType.MIMO.displayName
+        ServiceType.MIMO to ServiceType.MIMO.displayName,
+        ServiceType.MINIMAX to ServiceType.MINIMAX.displayName,
+        ServiceType.ALIBABA to ServiceType.ALIBABA.displayName
     )
     Card(
         modifier = Modifier.fillMaxWidth(),

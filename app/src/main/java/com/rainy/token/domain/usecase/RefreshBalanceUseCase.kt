@@ -2,6 +2,8 @@ package com.rainy.token.domain.usecase
 
 import com.rainy.token.data.repository.CodexRepository
 import com.rainy.token.data.repository.CommandCodeGoRepository
+import com.rainy.token.data.repository.AlibabaRepository
+import com.rainy.token.data.repository.MiniMaxRepository
 import com.rainy.token.data.repository.KimiRepository
 import com.rainy.token.data.repository.MiMoRepository
 import com.rainy.token.data.repository.ZaiGlmRepository
@@ -36,7 +38,9 @@ class RefreshBalanceUseCase @Inject constructor(
     private val ollamaRepositoryProvider: Provider<OllamaRepository>,
     private val zaiGlmRepositoryProvider: Provider<ZaiGlmRepository>,
     private val kimiRepositoryProvider: Provider<KimiRepository>,
-    private val mimoRepositoryProvider: Provider<MiMoRepository>
+    private val mimoRepositoryProvider: Provider<MiMoRepository>,
+    private val minimaxRepositoryProvider: Provider<MiniMaxRepository>,
+    private val alibabaRepositoryProvider: Provider<AlibabaRepository>
 ) {
     suspend operator fun invoke(service: ServiceType): Result<ServiceBalance> =
         withCredentialSession(service) {
@@ -64,6 +68,12 @@ class RefreshBalanceUseCase @Inject constructor(
                 }
                 ServiceType.MIMO -> retryOnTransientError {
                     mimoRepositoryProvider.get().fetchBalance()
+                }
+                ServiceType.MINIMAX -> retryOnTransientError {
+                    minimaxRepositoryProvider.get().fetchBalance()
+                }
+                ServiceType.ALIBABA -> retryOnTransientError {
+                    alibabaRepositoryProvider.get().fetchBalance()
                 }
             }
         }

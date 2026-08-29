@@ -52,11 +52,7 @@ fun ServiceIcon(
                 )
             }
         }
-        // 暂无专属图标的新服务（GLM / Kimi / MiMo）复用 CommandCode 的占位样式
-        ServiceType.COMMANDCODE_GO,
-        ServiceType.ZAI_GLM,
-        ServiceType.KIMI,
-        ServiceType.MIMO -> {
+        ServiceType.COMMANDCODE_GO -> {
             Box(
                 modifier = modifier
                     .size(size.dp)
@@ -117,6 +113,69 @@ fun ServiceIcon(
                 Image(
                     painter = painterResource(id = R.drawable.ic_ollama_logo),
                     contentDescription = "Ollama",
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
+        }
+
+        // 新增的 Coding Plan 服务：图标本身已带透明底和品牌色，
+        // 直接展示即可；深色主题下有专门的 -night 反色资源。
+        ServiceType.ZAI_GLM -> {
+            Box(
+                modifier = modifier.size(size.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Image(
+                    painter = painterResource(id = R.drawable.ic_glm_logo),
+                    contentDescription = service.displayName,
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
+        }
+        ServiceType.KIMI -> {
+            Box(
+                modifier = modifier.size(size.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Image(
+                    painter = painterResource(id = R.drawable.ic_kimi_logo),
+                    contentDescription = service.displayName,
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
+        }
+        ServiceType.MIMO -> {
+            Box(
+                modifier = modifier.size(size.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Image(
+                    painter = painterResource(id = R.drawable.ic_mimo_logo),
+                    contentDescription = service.displayName,
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
+        }
+        ServiceType.MINIMAX -> {
+            Box(
+                modifier = modifier.size(size.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Image(
+                    painter = painterResource(id = R.drawable.ic_minimax_logo),
+                    contentDescription = service.displayName,
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
+        }
+        ServiceType.ALIBABA -> {
+            Box(
+                modifier = modifier.size(size.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Image(
+                    painter = painterResource(id = R.drawable.ic_alibaba_logo),
+                    contentDescription = service.displayName,
                     modifier = Modifier.fillMaxSize()
                 )
             }

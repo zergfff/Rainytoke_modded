@@ -559,6 +559,8 @@ internal fun secondaryLineRes(card: DashboardCardUi): Int = when (card.service) 
     ServiceType.ZAI_GLM -> R.string.service_desc_zai_glm
     ServiceType.KIMI -> R.string.service_desc_kimi
     ServiceType.MIMO -> R.string.service_desc_mimo
+    ServiceType.MINIMAX -> R.string.service_desc_minimax
+    ServiceType.ALIBABA -> R.string.service_desc_alibaba
 }
 
 /**
