@@ -64,6 +64,7 @@ class AppSettingsStore @Inject constructor(
         val widgetStyleTextStyle = { e: WidgetElement -> stringPreferencesKey("ws_${e.key}_style") }
         val widgetBgColor = intPreferencesKey("ws_bg_color")
         val widgetBgAlpha = intPreferencesKey("ws_bg_alpha")
+        val lastWidgetRefreshAt = longPreferencesKey("last_widget_refresh_at")
     }
 
     // ─── Flows ───
@@ -158,6 +159,13 @@ class AppSettingsStore @Inject constructor(
             else prefs[Keys.widgetBgColor] = colorArgb
             prefs[Keys.widgetBgAlpha] = alpha.coerceIn(0, 255)
         }
+    }
+
+    /** 上次后台刷新成功的时间（epoch millis），0 表示从未刷新 */
+    val lastWidgetRefreshAt: Flow<Long> = ds.data.map { it[Keys.lastWidgetRefreshAt] ?: 0L }
+
+    suspend fun setLastWidgetRefreshAt(value: Long) {
+        ds.edit { it[Keys.lastWidgetRefreshAt] = value }
     }
 
     /** 清空所有自定义样式，恢复默认 */

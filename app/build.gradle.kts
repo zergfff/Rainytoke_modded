@@ -17,8 +17,8 @@ android {
         applicationId = "com.rainy.token"
         minSdk = 35
         targetSdk = 35
-        versionCode = 13
-        versionName = "1.7.0"
+        versionCode = 14
+        versionName = "1.7.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -250,7 +250,13 @@ dependencies {
     ksp(libs.hilt.compiler)
     implementation(libs.androidx.hilt.navigation.compose)
     implementation(libs.hilt.work)
-    ksp(libs.hilt.work)
+    // 注意：处理 @HiltWorker 的是 androidx.hilt:hilt-compiler，
+    // 不是 dagger 的 hilt-compiler。之前这里写的是 ksp(libs.hilt.work)
+    // （hilt-work 是运行时库，当处理器传进去不报错但也不生成任何代码），
+    // 导致 @HiltWorker 没有任何 Hilt binding，HiltWorkerFactory 找不到
+    // 映射、回退到反射构造，报 NoSuchMethodException: <init>[Context,
+    // WorkerParameters]，Worker 永远无法实例化 —— 后台刷新因此完全失效。
+    ksp(libs.androidx.hilt.compiler)
 
     // Room
     implementation(libs.room.runtime)

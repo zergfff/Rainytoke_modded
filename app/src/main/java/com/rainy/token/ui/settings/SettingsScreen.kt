@@ -213,6 +213,11 @@ fun SettingsScreen(
                     )
                 }
 
+                // 后台刷新状态（电池优化白名单）
+                item {
+                    BackgroundRefreshCard()
+                }
+
                 // 天气配置
                 item {
                     WeatherConfigCard(

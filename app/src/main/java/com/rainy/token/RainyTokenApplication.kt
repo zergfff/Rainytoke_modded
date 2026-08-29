@@ -5,8 +5,11 @@ import android.content.Context
 import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
 import androidx.work.WorkManager
+import com.rainy.token.data.local.appSettingsStore
 import com.rainy.token.ui.widget.WidgetPeriodicWorker
 import dagger.hilt.android.HiltAndroidApp
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 /**
@@ -24,9 +27,13 @@ class RainyTokenApplication : Application(), Configuration.Provider {
     lateinit var workerFactory: HiltWorkerFactory
 
     override val workManagerConfiguration: Configuration
-        get() = Configuration.Builder()
-            .setWorkerFactory(workerFactory)
-            .build()
+        get() {
+            val injected = ::workerFactory.isInitialized
+            android.util.Log.d("RainyApp", "workManagerConfiguration: workerFactory注入=$injected")
+            return Configuration.Builder()
+                .apply { if (injected) setWorkerFactory(workerFactory) }
+                .build()
+        }
 
     override fun attachBaseContext(base: Context) {
         super.attachBaseContext(com.rainy.token.util.LocaleManager.wrapContext(base))
@@ -39,8 +46,20 @@ class RainyTokenApplication : Application(), Configuration.Provider {
         // WeatherRepository 需要 application context
         CtxHolder.app = applicationContext
 
-        // 调度 WorkManager 周期性刷新
+        // 调度 WorkManager 周期性刷新。
+        // 先用默认间隔同步调度，保证任务一定存在；再异步读取用户设置的
+        // 间隔重新调度（DataStore 是异步的，不能阻塞 Application 启动）。
+        android.util.Log.d("RainyApp", "onCreate: 调度周期刷新")
         WidgetPeriodicWorker.schedule(applicationContext)
+        kotlinx.coroutines.MainScope().launch {
+            runCatching {
+                val interval = applicationContext.appSettingsStore.widgetRefreshIntervalMin.first()
+                android.util.Log.d("RainyApp", "读到用户间隔: ${interval}min")
+                WidgetPeriodicWorker.schedule(applicationContext, interval)
+            }.onFailure {
+                android.util.Log.w("RainyApp", "读取刷新间隔失败，沿用默认", it)
+            }
+        }
     }
 
     companion object {
