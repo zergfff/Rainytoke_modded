@@ -208,6 +208,7 @@
     <string name="help_ocgo_5">5. Copy the key → API Key field (format: oc_sk_…)</string>
     <string name="help_ocgo_6">6. Copy the {id} segment from https://opencode.ai/console/{id}/go</string>
     <string name="help_ocgo_7">7. Paste it → workspaceId field (optional, for display)</string>
+    <string name="help_ocgo_8">8. Save, then use the test button to verify once</string>
     <string name="help_ocgo_note">Note: the API Key is what the app authenticates with. Session cookies no longer work (the console was rebuilt as a tRPC app in Sep 2026).</string>
     <string name="help_ccgo_title">How to get CommandCode Go credentials?</string>
     <string name="help_ccgo_1">1. Open https://commandcode.ai and sign in with GitHub</string>
