@@ -55,8 +55,15 @@ import javax.inject.Singleton
  * 金额单位是 **microCents**（1 USD = 100_000_000 microCents），与旧版 `usagePercent` 语义不同，
  * 所以这里按 used/limit 现算百分比，extras 的 key 名保持不变，UI 侧无需改动。
  *
- * 鉴权用登录后的会话 Cookie：生产环境名 `__Host-console_session`（开发环境 `console_session`），
- * 值就是 DevTools 里那串以 `Fe26.2` 开头的长字符。
+ * **鉴权**：必须用 Service API Key（`oc_sk_…` / `sk-…`），走 `Authorization: Bearer`。
+ * 实测该端点挂了一道 `AuthenticatedWorkspaceAccess` 中间件（bundle 里定义
+ * `security: { bearer: <BearerScheme> }`），**纯会话 Cookie 一律 401**，无论用
+ * `__Host-console_session` 还是 `console_session`、无论加什么 `x-org-id` 之类的作用域头。
+ * 会话 Cookie 只作为可选的补充凭据一并带上（部分部署会额外校验），不是必需。
+ *
+ * **时间字段**：2026-09 实测返回的是 ISO-8601 字符串（如 `"2026-10-05T00:00:00.000Z"`），
+ * **不是 epoch 毫秒**。早期按 `.toLongOrNull()` 解析会静默返回 null、重置时间全部丢失，
+ * 因此统一走 [asEpochMillisOrNull]（兼容 ISO 字符串与数字两种形态）。
  *
  * 不在类上加 @Inject constructor —— 在 [com.rainy.token.di.NetworkModule] 里 @Provides 显式提供。
  * 规避 KSP 2.x 多文件 @Inject 跨依赖的"could not be resolved"误报。
@@ -78,17 +85,19 @@ class OpenCodeGoRepository(
             return@withContext Result.failure(RepositoryError.InvalidCredential("凭据类型不匹配"))
         }
 
-        // 新版 Console 不再需要 workspaceId 定位，workspaceId 只用于展示；
-        // 鉴权统一走会话 Cookie。
-        val session = resolveSessionCookie(credential)
-        if (session.isNullOrBlank()) {
-            return@withContext Result.failure(
+        // 鉴权用 Service API Key（oc_sk_…/sk-…），走 Authorization: Bearer。
+        // 2026-09 实测：/console/api/go/status 这道 AuthenticatedWorkspaceAccess
+        // 网关只认 bearer，纯会话 Cookie 一律 401。
+        // 早期试过拿会话 Cookie 走 /workspace/{id}/go 抓 SSR，那是改版前的旧路径。
+        val apiKey = credential.apiKey?.takeIf { it.isNotBlank() }
+            ?: return@withContext Result.failure(
                 RepositoryError.InvalidCredential(
-                    "缺少会话 Cookie。请在浏览器登录 opencode.ai 后，从 DevTools → Application → Cookies " +
-                    "复制 __Host-console_session 的值（即那串以 Fe26.2 开头的长字符）"
+                    "缺少 API Key。请在 https://opencode.ai/console/service-accounts 新建一个 " +
+                    "Service API Key（形如 oc_sk_…），填入本 APP 设置页的 OpenCode Go 区域"
                 )
             )
-        }
+
+        val session = resolveSessionCookie(credential)
 
         val request = Request.Builder()
             .url(GO_STATUS_API)
@@ -96,7 +105,11 @@ class OpenCodeGoRepository(
             .header("Accept", "application/json")
             .header("Origin", WEB_ORIGIN)
             .header("Referer", "$WEB_ORIGIN/console")
-            .header("Cookie", buildCookieHeader(credential, session))
+            .header("Authorization", "Bearer $apiKey")
+            .apply {
+                // 会话 Cookie 可选：带上更稳（部分部署会额外校验），但不是必需
+                session?.let { header("Cookie", buildCookieHeader(credential, it)) }
+            }
             .get()
             .build()
 
@@ -113,22 +126,34 @@ class OpenCodeGoRepository(
 
             if (!resp.isSuccessful) {
                 DebugLog.e(TAG, "go/status: HTTP ${resp.code} body=${body.take(300)}")
-                if (resp.code == 401 || resp.code == 403) {
+                if (resp.code == 401) {
                     return@withContext Result.failure(
                         RepositoryError.InvalidCredential(
-                            "会话已失效 (HTTP ${resp.code})。请重新登录 opencode.ai 并复制最新的 " +
-                            "__Host-console_session Cookie"
+                            "API Key 无效或已撤销 (HTTP 401)。请到 " +
+                            "https://opencode.ai/console/service-accounts 确认该 Key 仍有效"
+                        )
+                    )
+                }
+                if (resp.code == 403) {
+                    return@withContext Result.failure(
+                        RepositoryError.InvalidCredential(
+                            "API Key 无权读取 Go 订阅 (HTTP 403)。请确认该 Key 属于当前 OpenCode " +
+                            "账户、且账户内有生效的 Go 订阅。"
                         )
                     )
                 }
                 return@withContext Result.failure(RepositoryError.ServerError(resp.code))
             }
 
-            // tRPC 用 _tag 区分结果：失败时返回 {"_tag":"Unauthorized"}，成功时是数据对象本身
-            if (body.contains("\"_tag\":\"Unauthorized\"") || body.contains("\"_tag\": \"Unauthorized\"")) {
-                return@withContext Result.failure(
-                    RepositoryError.InvalidCredential("会话无效或已过期，请重新登录 opencode.ai")
-                )
+            // tRPC 用 _tag 区分结果：{"_tag":"Unauthorized"} / {"_tag":"Forbidden"} / {"_tag":"ServerError"}
+            val tag = rootTagOf(body)
+            if (tag != null) {
+                val msg = when (tag) {
+                    "Unauthorized" -> "API Key 无效或已撤销，请到 Console → service-accounts 确认"
+                    "Forbidden" -> "API Key 无权读取该账户的 Go 额度，请确认账户内有生效的订阅"
+                    else -> "服务端返回错误：$tag"
+                }
+                return@withContext Result.failure(RepositoryError.InvalidCredential(msg))
             }
 
             val root = try {
@@ -210,7 +235,8 @@ class OpenCodeGoRepository(
                 put("planName", planName)
                 root["cancelAtPeriodEnd"]?.jsonPrimitive?.let { put("cancelAtPeriodEnd", it.content) }
                 root["useBalance"]?.jsonPrimitive?.let { put("useBalance", it.content) }
-                access["endsAt"]?.asLongOrNull()?.let { put("periodEnd", it.toString()) }
+                // endsAt 是 ISO-8601 字符串（实测），必须走 asEpochMillisOrNull 而非 asLongOrNull
+                access["endsAt"]?.asEpochMillisOrNull()?.let { put("periodEnd", it.toString()) }
             }
 
             val balance = ServiceBalance(
@@ -430,20 +456,73 @@ private const val MICRO_CENTS_PER_USD = 100_000_000.0
 /**
  * 解析一个配额窗口对象 `{startsAt?, resetsAt, limitMicroCents, usedMicroCents}`。
  *
- * microCents 字段在响应里可能是**字符串**（BigInt 序列化，如 `"1200000000"`）
+ * microCents 字段在响应里是**字符串**（BigInt 序列化，如 `"1200000000"`），
  * 也可能是数字，两种都要认；三个字段全缺时返回 null，表示该窗口不可用。
  */
 internal fun JsonObject.toGoWindow(): OpenCodeGoRepository.GoWindow? {
-    val resetsAt = this["resetsAt"]?.asLongOrNull()
+    val resetsAt = this["resetsAt"]?.asEpochMillisOrNull()
     val used = this["usedMicroCents"]?.asLongOrNull()
     val limit = this["limitMicroCents"]?.asLongOrNull()
     if (resetsAt == null && used == null && limit == null) return null
     return OpenCodeGoRepository.GoWindow(
-        startsAt = this["startsAt"]?.asLongOrNull(),
+        startsAt = this["startsAt"]?.asEpochMillisOrNull(),
         resetsAt = resetsAt,
         usedMicroCents = used,
         limitMicroCents = limit
     )
+}
+
+/**
+ * 时间字段 → epoch 毫秒。
+ *
+ * 2026-09 实测：go/status 返回的是 **ISO-8601 字符串**（如 `"2026-10-05T00:00:00.000Z"`），
+ * 不是 epoch 毫秒。同时保留数字形态的兼容，避免服务端将来改成数字时解析失败。
+ */
+internal fun JsonElement.asEpochMillisOrNull(): Long? {
+    val text = when (this) {
+        is JsonPrimitive -> content.trim().trim('"')
+        else -> return null
+    }
+    if (text.isEmpty()) return null
+    text.toLongOrNull()?.let { return it }          // 已是 epoch 毫秒
+    text.toDoubleOrNull()?.let { return it.toLong() } // epoch 带小数
+    return parseIsoToEpochMillis(text)
+}
+
+/**
+ * 解析 ISO-8601 → epoch 毫秒。
+ *
+ * 覆盖实测到的 `2026-10-05T00:00:00.000Z`，以及无毫秒、带时区偏移、
+ * 带空格分隔等形式。SimpleDateFormat 非线程安全，每次新建实例。
+ */
+internal fun parseIsoToEpochMillis(iso: String): Long? {
+    val patterns = listOf(
+        "yyyy-MM-dd'T'HH:mm:ss.SSSXXX",
+        "yyyy-MM-dd'T'HH:mm:ssXXX",
+        "yyyy-MM-dd'T'HH:mm:ss.SSS",
+        "yyyy-MM-dd'T'HH:mm:ss",
+        "yyyy-MM-dd HH:mm:ss.SSS",
+        "yyyy-MM-dd HH:mm:ss"
+    )
+    for (p in patterns) {
+        try {
+            val sdf = java.text.SimpleDateFormat(p, java.util.Locale.US)
+            // 严格模式：否则 lenient 解析会「吃掉」不匹配的尾部字符而给出错误时间
+            // （例如把 "2026-09-30T06:21:35.669Z" 用无毫秒的 pattern 解析成整秒）。
+            sdf.isLenient = false
+            if (!p.contains("XXX")) sdf.timeZone = java.util.TimeZone.getTimeZone("UTC")
+            return sdf.parse(iso)?.time
+        } catch (_: Exception) {
+            // 试下一个格式
+        }
+    }
+    return null
+}
+
+/** 从 tRPC 响应体里取根 `_tag`（成功时为 null） */
+internal fun rootTagOf(body: String): String? {
+    val m = Regex("\"_tag\"\\s*:\\s*\"([A-Za-z]+)\"").find(body) ?: return null
+    return m.groupValues.get(1)
 }
 
 /** JsonElement → Long，兼容字符串与数字两种表示 */

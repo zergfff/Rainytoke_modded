@@ -114,6 +114,13 @@ class CredentialEditViewModel @Inject constructor(
         _uiState.update { it.copy(workspaceId = value) }
     }
 
+    /**
+     * 保存 OpenCode Go 的 Service API Key。
+     *
+     * 必须写进 [Credential.SessionCredential.apiKey]（与 authCookie / workspaceId 同一个凭据对象），
+     * 不能存成 [Credential.ApiKeyCredential]——那会把整个 SessionCredential 替换掉，
+     * 导致 authCookie/workspaceId 丢失，而且 [OpenCodeGoRepository] 也只读 SessionCredential.apiKey。
+     */
     fun saveApiKey() {
         val type = serviceType ?: return
         val current = _uiState.value
@@ -123,12 +130,23 @@ class CredentialEditViewModel @Inject constructor(
             return
         }
         viewModelScope.launch {
-            val existing = credentialRepository.get(type) as? Credential.ApiKeyCredential
-            val updated = (existing ?: Credential.ApiKeyCredential(
-                service = type,
-                key = trimmedKey,
-                lastVerifiedAt = 0L
-            )).copy(key = trimmedKey)
+            val existing = credentialRepository.get(type)
+            val updated = when (existing) {
+                is Credential.SessionCredential -> existing.copy(
+                    apiKey = trimmedKey,
+                    lastVerifiedAt = System.currentTimeMillis()
+                )
+                is Credential.ApiKeyCredential -> Credential.SessionCredential(
+                    service = type,
+                    apiKey = trimmedKey,
+                    lastVerifiedAt = System.currentTimeMillis()
+                )
+                else -> Credential.SessionCredential(
+                    service = type,
+                    apiKey = trimmedKey,
+                    lastVerifiedAt = System.currentTimeMillis()
+                )
+            }
             credentialRepository.save(updated)
             _uiState.update {
                 it.copy(
@@ -260,7 +278,8 @@ class CredentialEditViewModel @Inject constructor(
     fun saveOpenCodeGoSession() {
         val type = serviceType ?: return
         val current = _uiState.value
-        if (current.authCookie.isBlank() || current.workspaceId.isBlank()) {
+        // 2026-09 改版：workspaceId 变成可选，必需项是 API Key（见 hasRequiredFields 注释）
+        if (current.apiKey.isBlank() && current.authCookie.isBlank()) {
             _uiState.update {
                 it.copy(message = UiText.Resource(R.string.error_auth_cookie_workspace))
             }
@@ -277,7 +296,8 @@ class CredentialEditViewModel @Inject constructor(
     fun testAndSaveOpenCodeGo() {
         val type = serviceType ?: return
         val current = _uiState.value
-        if (current.authCookie.isBlank() || current.workspaceId.isBlank()) {
+        // 同上：workspaceId 可选
+        if (current.apiKey.isBlank() && current.authCookie.isBlank()) {
             _uiState.update {
                 it.copy(message = UiText.Resource(R.string.error_auth_cookie_workspace))
             }
@@ -298,6 +318,8 @@ class CredentialEditViewModel @Inject constructor(
     private suspend fun doSaveOpenCodeGo(workspaceId: String, authCookie: String) {
         val type = serviceType ?: return
         val existing = credentialRepository.get(type) as? Credential.SessionCredential
+        // 只更新这两个字段；apiKey 必须原样保留，否则会被清成 null，
+        // 而它才是 /console/api/go/status 真正的鉴权凭据。
         val updated = (existing ?: Credential.SessionCredential(
             service = type,
             cookies = emptyList()

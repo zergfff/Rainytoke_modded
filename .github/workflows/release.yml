@@ -31,12 +31,14 @@ jobs:
 
       - name: Restore keystore from secret
         run: |
+          # 正式发版必须用正式密钥库：debug 签名（随机生成的 runner keystore）
+          # 与历史版本签名不同，用户无法覆盖安装，必须先卸载。
           if [ -z "${{ secrets.KEYSTORE_BASE64 }}" ]; then
-            echo "::warning::KEYSTORE_BASE64 未配置，将回退到 debug 签名"
-          else
-            echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > release.jks
-            echo "keystore restored: $(stat -c%s release.jks) bytes"
+            echo "::error::KEYSTORE_BASE64 未配置 —— 拒绝以 debug 签名发版（会导致用户无法覆盖安装）"
+            exit 1
           fi
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > release.jks
+          echo "keystore restored: $(stat -c%s release.jks) bytes"
 
       - name: Build Release APK
         env:

@@ -404,6 +404,16 @@ private fun OllamaCookieForm(
     }
 }
 
+/**
+ * OpenCode Go 表单的必填校验。
+ *
+ * 2026-09 改版后：真正必需的只有 **API Key**（`/console/api/go/status` 只认
+ * `Authorization: Bearer`，会话 Cookie 已不再有效）。workspaceId 仅用于展示，
+ * authCookie 作为可选的补充会话凭据。
+ */
+private fun hasRequiredFields(authCookie: String, apiKey: String): Boolean =
+    apiKey.isNotBlank() || authCookie.isNotBlank()
+
 @Composable
 private fun OpenCodeGoForm(
     authCookie: String,
@@ -452,14 +462,14 @@ private fun OpenCodeGoForm(
     Button(
         onClick = onSave,
         modifier = Modifier.fillMaxWidth(),
-        enabled = authCookie.isNotBlank() && workspaceId.isNotBlank()
+        enabled = hasRequiredFields(authCookie, triggerApiKey)
     ) {
         Text(text = if (hasExisting) stringResource(R.string.credential_update) else stringResource(R.string.credential_save))
     }
     OutlinedButton(
         onClick = onTestAndSave,
         modifier = Modifier.fillMaxWidth(),
-        enabled = authCookie.isNotBlank() && workspaceId.isNotBlank()
+        enabled = hasRequiredFields(authCookie, triggerApiKey)
     ) {
         Text(text = stringResource(R.string.action_test_and_save))
     }
@@ -479,7 +489,7 @@ private fun OpenCodeGoForm(
     // ── 一键激活用量 API Key ──
     androidx.compose.material3.HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
     Text(
-        text = stringResource(R.string.activate_api_key_optional),
+        text = stringResource(R.string.activate_api_key_required),
         style = MaterialTheme.typography.titleSmall
     )
     Text(
@@ -491,7 +501,7 @@ private fun OpenCodeGoForm(
         value = triggerApiKey,
         onValueChange = onApiKeyChange,
         label = { Text(stringResource(R.string.field_api_key)) },
-        placeholder = { Text("opencode-xxx") },
+        placeholder = { Text("oc_sk_… or sk-…") },
         singleLine = true,
         visualTransformation = PasswordVisualTransformation(),
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),

@@ -115,6 +115,95 @@ class OpenCodeGoRepositoryTest {
         assertTrue("resetInSec 应接近 3600，实际=$sec", sec in 3500..3600)
     }
 
+    // ===== 2026-09 实测：时间字段是 ISO-8601 字符串，不是 epoch 毫秒 =====
+    // 真实响应片段：
+    // "fiveHour":{"startsAt":"2026-09-30T01:21:35.669Z","resetsAt":"2026-09-30T06:21:35.669Z", ...}
+    // "week":{"startsAt":"2026-09-28T00:00:00.000Z","resetsAt":"2026-10-05T00:00:00.000Z", ...}
+    // "month":{"resetsAt":"2026-10-08T05:13:17.000Z", ...}
+
+    @Test
+    fun `parses ISO-8601 resetsAt with milliseconds`() {
+        val windows = parseWindows(
+            """{"meters":{"fiveHour":{"resetsAt":"2026-09-30T06:21:35.669Z",
+                |"usedMicroCents":"0","limitMicroCents":"1200000000"}}}""".trimMargin()
+        )
+        // 2026-09-30T06:21:35.669Z 的 epoch 毫秒
+        assertEquals(1790749295669L, windows["rolling"]!!.resetsAt)
+    }
+
+    @Test
+    fun `parses ISO-8601 resetsAt at exact midnight`() {
+        val windows = parseWindows(
+            """{"meters":{"week":{"resetsAt":"2026-10-05T00:00:00.000Z",
+                |"usedMicroCents":"306519745","limitMicroCents":"3000000000"}}}""".trimMargin()
+        )
+        assertEquals(1791158400000L, windows["weekly"]!!.resetsAt)
+    }
+
+    @Test
+    fun `parses ISO-8601 without milliseconds`() {
+        val windows = parseWindows(
+            """{"meters":{"month":{"resetsAt":"2026-10-08T05:13:17Z",
+                |"usedMicroCents":"2929845041","limitMicroCents":"6000000000"}}}""".trimMargin()
+        )
+        assertEquals(1791436397000L, windows["monthly"]!!.resetsAt)
+    }
+
+    @Test
+    fun `real response values produce expected percentages`() {
+        // 实测真实数据：周 $3.0652/$30 = 10.22%，月 $29.2985/$60 = 48.83%
+        val meters = """{"meters":{
+            "fiveHour":{"startsAt":"2026-09-30T01:21:35.669Z","resetsAt":"2026-09-30T06:21:35.669Z",
+                        "limitMicroCents":"1200000000","usedMicroCents":"0"},
+            "week":{"startsAt":"2026-09-28T00:00:00.000Z","resetsAt":"2026-10-05T00:00:00.000Z",
+                    "limitMicroCents":"3000000000","usedMicroCents":"306519745"},
+            "month":{"resetsAt":"2026-10-08T05:13:17.000Z",
+                     "limitMicroCents":"6000000000","usedMicroCents":"2929845041"}}}"""
+        val windows = parseWindows(meters)
+
+        assertEquals(3, windows.size)
+        assertEquals(0.0, windows["rolling"]!!.usagePercent(), 0.01)
+        assertEquals(10.22, windows["weekly"]!!.usagePercent(), 0.01)
+        assertEquals(48.83, windows["monthly"]!!.usagePercent(), 0.01)
+
+        assertEquals(3.06519745, windows["weekly"]!!.usedUsd!!, 1e-6)
+        assertEquals(29.29845041, windows["monthly"]!!.usedUsd!!, 1e-6)
+        assertEquals(60.0, windows["monthly"]!!.limitUsd!!, 1e-6)
+
+        // month 窗口实测无 startsAt
+        assertNull(windows["monthly"]!!.startsAt)
+        assertNotNull(windows["monthly"]!!.resetsAt)
+    }
+
+    @Test
+    fun `epoch millis still accepted for forward compatibility`() {
+        val future = System.currentTimeMillis() + 7_200_000L
+        val windows = parseWindows(
+            """{"meters":{"fiveHour":{"resetsAt":$future,
+                |"usedMicroCents":"0","limitMicroCents":"1200000000"}}}""".trimMargin()
+        )
+        assertEquals(future, windows["rolling"]!!.resetsAt)
+    }
+
+    @Test
+    fun `rootTagOf reads trpc error tag`() {
+        assertEquals("Unauthorized", rootTagOf("""{"_tag":"Unauthorized"}"""))
+        assertEquals("Forbidden", rootTagOf("""{"_tag": "Forbidden"}"""))
+        assertNull(rootTagOf("""{"product":"go","access":{}}"""))
+    }
+
+    @Test
+    fun `parseIsoToEpochMillis handles offsets`() {
+        // 带 +08:00 偏移应换算成 UTC
+        assertEquals(1791158400000L, parseIsoToEpochMillis("2026-10-05T08:00:00.000+08:00"))
+    }
+
+    @Test
+    fun `parseIsoToEpochMillis returns null for garbage`() {
+        assertNull(parseIsoToEpochMillis("not-a-date"))
+        assertNull(parseIsoToEpochMillis(""))
+    }
+
     @Test
     fun `resetInSec is zero when already past`() {
         val windows = parseWindows(buildMetersJson(resetsAt = 1_000L))

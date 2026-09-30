@@ -75,7 +75,7 @@ jobs:
           retention-days: 14
 
   build-release:
-    name: Release APK (debug-signed)
+    name: Release APK (officially signed)
     runs-on: ubuntu-latest
     needs: test
     steps:
@@ -91,21 +91,31 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      # 确保存在 debug keystore（某些 runner 镜像可能没有）
-      - name: Ensure debug keystore
+      # 使用与 Release workflow 完全相同的正式密钥库。
+      # 之前这里没有注入 release.jks（且未传签名环境变量），build.gradle.kts 会因
+      # GitHub 自动设置的 CI=true 回退到 runner 上**随机生成**的 debug keystore，
+      # 于是 CI 产出的 APK 与 Releases 上的正式包签名不同 —— 用户从 Artifacts
+      # 下载后无法覆盖安装，必须先卸载。现在改为注入正式密钥库。
+      #
+      # fork 的 PR 拿不到 secret，此时降级为 debug 签名并明确改名，避免误用。
+      - name: Restore keystore from secret
+        id: keystore
         run: |
-          KS="$HOME/.android/debug.keystore"
-          mkdir -p "$HOME/.android"
-          if [ ! -f "$KS" ]; then
-            keytool -genkeypair -v -keystore "$KS" -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
-            echo "Generated debug keystore"
+          if [ -z "${{ secrets.KEYSTORE_BASE64 }}" ]; then
+            echo "official=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::KEYSTORE_BASE64 不可用（fork PR？）—— 将产出 debug 签名 APK，仅供编译验证，请勿安装，产物会明确标注"
           else
-            echo "Debug keystore exists"
+            echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > release.jks
+            echo "keystore restored: $(stat -c%s release.jks) bytes"
+            echo "official=true" >> "$GITHUB_OUTPUT"
           fi
 
-      # CI 无 release.jks；build.gradle.kts 自动 fallback 到 debug keystore
-      # 只验证编译 + 资源完整性，签名由 Release workflow 用 secrets 完成
       - name: Assemble Release
+        env:
+          CI: true
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEYSTORE_ALIAS: ${{ secrets.KEYSTORE_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
         run: ./gradlew assembleRelease
 
       - name: Verify Release APK
@@ -121,9 +131,66 @@ jobs:
           unzip -l "$APK" | grep -q "res/" || { echo "❌ res/ directory missing"; exit 1; }
           echo "✅ APK integrity verified: manifest + arsc + res/ all present"
 
+      # 断言用的是正式签名，而不是 debug 兜底。
+      # debug keystore 由 runner 随机生成，签名与 Releases 上的正式包不同，
+      # 用户装上去后下一版就无法覆盖安装（必须卸载）。这里直接卡死。
+      #
+      # 注意：AGP 默认产出 v2/v3 签名（APK Signing Block），APK 里**没有**
+      # META-INF/*.RSA，所以不能用 keytool -printcert 读，必须用 apksigner。
+      - name: Verify APK is officially signed
+        run: |
+          APK=app/build/outputs/apk/release/app-release.apk
+          APKSIGNER=$(ls -d "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -1)
+          echo "using $APKSIGNER"
+
+          CERTS=$("$APKSIGNER" verify --print-certs "$APK" 2>&1) || {
+            echo "::error::APK 签名校验失败：$CERTS"
+            exit 1
+          }
+          echo "$CERTS"
+
+          SIGNER=$(echo "$CERTS" | grep -i "SHA-256 digest" | head -1 \
+                   | sed 's/.*digest: *//' | tr -d ':' | tr 'A-F' 'a-f')
+          echo "APK signer SHA-256: ${SIGNER:-<none>}"
+
+          IS_DEBUG=no
+          if echo "$CERTS" | grep -qi "CN=Android Debug"; then IS_DEBUG=yes; fi
+          OFFICIAL="${{ steps.keystore.outputs.official }}"
+
+          if [ "$OFFICIAL" != "true" ]; then
+            # fork PR：拿不到正式密钥库，只保证能编译；产物会被改名标注
+            echo "::warning::本次为 debug 签名（无正式密钥库），仅供编译验证，请勿安装"
+            exit 0
+          fi
+
+          if [ "$IS_DEBUG" = "yes" ]; then
+            echo "::error::正式构建却检测到 debug 签名 —— 该 APK 无法覆盖安装正式版"
+            exit 1
+          fi
+          if [ -z "$SIGNER" ]; then
+            echo "::error::无法从 apksigner 输出解析 SHA-256 指纹"
+            exit 1
+          fi
+
+          EXPECTED="${{ secrets.KEYSTORE_EXPECTED_SHA256 }}"
+          if [ -z "$EXPECTED" ]; then
+            echo "::warning::KEYSTORE_EXPECTED_SHA256 未配置，跳过指纹比对（仅做了非-debug 检查）"
+          else
+            EXP=$(echo "$EXPECTED" | tr -d ':' | tr -d ' ' | tr 'A-F' 'a-f')
+            if [ "$SIGNER" != "$EXP" ]; then
+              echo "::error::APK 签名指纹与预期不符 —— 会导致无法覆盖安装"
+              echo "  实际: $SIGNER"
+              echo "  预期: $EXP"
+              exit 1
+            fi
+            echo "✅ 指纹与预期一致，可覆盖安装"
+          fi
+          echo "✅ Officially signed (not debug)"
+
       - name: Upload Release APK
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4
         with:
-          name: release-apk
+          # 名字里标明签名类型，避免把 debug 包当成可覆盖安装的正式包下载
+          name: ${{ steps.keystore.outputs.official == 'true' && 'release-apk-official' || 'release-apk-DEBUG-DO-NOT-INSTALL' }}
           path: app/build/outputs/apk/release/app-release.apk
           retention-days: 14
