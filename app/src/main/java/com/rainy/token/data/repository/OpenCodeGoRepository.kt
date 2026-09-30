@@ -10,6 +10,7 @@ import com.rainy.token.domain.service.ServiceType
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
@@ -20,18 +21,42 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.IOException
-import java.net.URLEncoder
 import javax.inject.Singleton
 
 /**
- * OpenCode Go 配额仓库。计划阶段 5.3（已根据 [slkiser/opencode-quota](https://github.com/slkiser/opencode-quota)
- * 调整实现）：
+ * OpenCode Go 配额仓库。
  *
- * - 用户在浏览器登录 https://opencode.ai/auth（GitHub / Google）
- * - 登录后访问 dashboard，URL 形如 `https://opencode.ai/workspace/{workspaceId}/go`
- * - 用户从 dashboard URL 中复制 `workspaceId` + 浏览器 DevTools 的 `auth` cookie 值
- * - 粘贴到 APP，APP 用 OkHttp 携带 Cookie 抓取该 URL
- * - 解析 HTML 中 SolidJS SSR hydration 字段 `rollingUsage` / `weeklyUsage` / `monthlyUsage`
+ * 2026-09 OpenCode 改版：控制台从 SolidStart SSR 站迁移为独立的 tRPC SPA（`/console`），
+ * 旧的「抓 HTML 里 `rollingUsage/weeklyUsage/monthlyUsage` hydration 字段」的做法彻底失效
+ * —— SSR HTML 里只剩一个空的 `<div id="app">`，没有任何用量数据。
+ *
+ * 新实现改为调官方 JSON 端点：
+ * ```
+ * GET https://opencode.ai/console/api/go/status
+ * ```
+ * 响应（节选）：
+ * ```json
+ * {
+ *   "subscriberUserId": "usr_...",
+ *   "product": "go",
+ *   "cancelAtPeriodEnd": false,
+ *   "renewalPending": false,
+ *   "access": {
+ *     "startsAt": 1790675391700,
+ *     "endsAt": 1793267391700,
+ *     "meters": {
+ *       "fiveHour": { "startsAt":..., "resetsAt":..., "limitMicroCents":"1200000000", "usedMicroCents":"..." },
+ *       "week":     { "startsAt":..., "resetsAt":..., "limitMicroCents":"3000000000", "usedMicroCents":"..." },
+ *       "month":    {                "resetsAt":..., "limitMicroCents":"6000000000", "usedMicroCents":"..." }
+ *     }
+ *   }
+ * }
+ * ```
+ * 金额单位是 **microCents**（1 USD = 100_000_000 microCents），与旧版 `usagePercent` 语义不同，
+ * 所以这里按 used/limit 现算百分比，extras 的 key 名保持不变，UI 侧无需改动。
+ *
+ * 鉴权用登录后的会话 Cookie：生产环境名 `__Host-console_session`（开发环境 `console_session`），
+ * 值就是 DevTools 里那串以 `Fe26.2` 开头的长字符。
  *
  * 不在类上加 @Inject constructor —— 在 [com.rainy.token.di.NetworkModule] 里 @Provides 显式提供。
  * 规避 KSP 2.x 多文件 @Inject 跨依赖的"could not be resolved"误报。
@@ -47,25 +72,31 @@ class OpenCodeGoRepository(
 
     suspend fun fetchBalance(): Result<ServiceBalance> = withContext(Dispatchers.IO) {
         val credential = credentialRepository.get(ServiceType.OPENCODE_GO)
-            ?: return@withContext Result.failure(RepositoryError.InvalidCredential())
+            ?: return@withContext Result.failure(RepositoryError.InvalidCredential("未找到 OpenCode Go 凭据"))
 
         if (credential !is Credential.SessionCredential) {
-            return@withContext Result.failure(RepositoryError.InvalidCredential())
+            return@withContext Result.failure(RepositoryError.InvalidCredential("凭据类型不匹配"))
         }
 
-        val authCookie = credential.authCookie
-        val workspaceId = credential.workspaceId
-        if (authCookie.isNullOrBlank() || workspaceId.isNullOrBlank()) {
-            return@withContext Result.failure(RepositoryError.InvalidCredential())
+        // 新版 Console 不再需要 workspaceId 定位，workspaceId 只用于展示；
+        // 鉴权统一走会话 Cookie。
+        val session = resolveSessionCookie(credential)
+        if (session.isNullOrBlank()) {
+            return@withContext Result.failure(
+                RepositoryError.InvalidCredential(
+                    "缺少会话 Cookie。请在浏览器登录 opencode.ai 后，从 DevTools → Application → Cookies " +
+                    "复制 __Host-console_session 的值（即那串以 Fe26.2 开头的长字符）"
+                )
+            )
         }
-
-        val url = "https://opencode.ai/workspace/${URLEncoder.encode(workspaceId, "UTF-8")}/go"
 
         val request = Request.Builder()
-            .url(url)
-            .header("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Gecko/20100101 Firefox/148.0")
-            .header("Accept", "text/html")
-            .header("Cookie", "auth=$authCookie")
+            .url(GO_STATUS_API)
+            .header("User-Agent", DESKTOP_UA)
+            .header("Accept", "application/json")
+            .header("Origin", WEB_ORIGIN)
+            .header("Referer", "$WEB_ORIGIN/console")
+            .header("Cookie", buildCookieHeader(credential, session))
             .get()
             .build()
 
@@ -78,70 +109,176 @@ class OpenCodeGoRepository(
         }
 
         response.use { resp ->
+            val body = resp.body?.string().orEmpty()
+
             if (!resp.isSuccessful) {
+                DebugLog.e(TAG, "go/status: HTTP ${resp.code} body=${body.take(300)}")
                 if (resp.code == 401 || resp.code == 403) {
-                    return@withContext Result.failure(RepositoryError.InvalidCredential())
+                    return@withContext Result.failure(
+                        RepositoryError.InvalidCredential(
+                            "会话已失效 (HTTP ${resp.code})。请重新登录 opencode.ai 并复制最新的 " +
+                            "__Host-console_session Cookie"
+                        )
+                    )
                 }
                 return@withContext Result.failure(RepositoryError.ServerError(resp.code))
             }
 
-            val html = resp.body?.string() ?: return@withContext Result.failure(
-                RepositoryError.ParseError(RepositoryError.ParseErrorReason.EMPTY_BODY, "响应体为空")
-            )
+            // tRPC 用 _tag 区分结果：失败时返回 {"_tag":"Unauthorized"}，成功时是数据对象本身
+            if (body.contains("\"_tag\":\"Unauthorized\"") || body.contains("\"_tag\": \"Unauthorized\"")) {
+                return@withContext Result.failure(
+                    RepositoryError.InvalidCredential("会话无效或已过期，请重新登录 opencode.ai")
+                )
+            }
 
-            val windows = parseWindows(html)
-            if (windows.isEmpty()) {
+            val root = try {
+                json.parseToJsonElement(body).jsonObject
+            } catch (e: Exception) {
                 return@withContext Result.failure(
                     RepositoryError.ParseError(
-                        RepositoryError.ParseErrorReason.NO_WINDOWS,
-                        "解析失败：未找到任何 OpenCode Go 配额窗口。HTML=${html.length} 字节。"
+                        RepositoryError.ParseErrorReason.NOT_JSON_OBJECT,
+                        "响应不是合法 JSON：${body.take(160)}"
                     )
                 )
             }
 
-            // 主体数据用 rollingUsage（5h 滚动窗口），这是用户最关心的"实时配额"
-            val primary = windows["rollingUsage"] ?: windows.values.first()
+            val access = root["access"]?.jsonObject
+            if (access == null) {
+                // access 为 null 表示当前没有生效的 Go 订阅
+                val renewalPending = root["renewalPending"]?.asBoolean() == true
+                return@withContext Result.failure(
+                    RepositoryError.Unknown(
+                        IllegalStateException(
+                            if (renewalPending) "Go 订阅正在续费中，尚未生效，请稍后重试"
+                            else "未找到有效的 OpenCode Go 订阅（access 为空）"
+                        )
+                    )
+                )
+            }
+
+            val meters = access["meters"]?.jsonObject
+            if (meters == null) {
+                return@withContext Result.failure(
+                    RepositoryError.ParseError(
+                        RepositoryError.ParseErrorReason.NO_WINDOWS,
+                        "响应缺少 access.meters，无法解析配额窗口"
+                    )
+                )
+            }
+
+            val fiveHour = meters["fiveHour"]?.jsonObject?.toGoWindow()
+            val week = meters["week"]?.jsonObject?.toGoWindow()
+            val month = meters["month"]?.jsonObject?.toGoWindow()
+
+            if (fiveHour == null && week == null && month == null) {
+                return@withContext Result.failure(
+                    RepositoryError.ParseError(
+                        RepositoryError.ParseErrorReason.NO_WINDOWS,
+                        "三个配额窗口（fiveHour/week/month）均为空"
+                    )
+                )
+            }
+
+            // 主体数据用 5 小时滚动窗口，这是用户最关心的"实时配额"
+            val primary = fiveHour ?: week ?: month!!
             val config = ServiceConfigProvider.get(ServiceType.OPENCODE_GO)
 
-            // 把 3 个窗口的用量百分比 + 重置时间全部塞进 extras（详情页按窗口渲染）
-            // usage/limit 为页面新增的用量与限额字段（单位以服务端定义为准，保留供详情页展示，UI 兼容缺失场景）
+            val product = root["product"]?.jsonPrimitive?.contentOrNull ?: "go"
+            val planName = if (product == "go-plus") "Go Plus" else "Go"
+
+            // 把 3 个窗口的用量百分比 + 重置时间全部塞进 extras（key 名与旧版保持一致，UI 无需改动）
             val extras = buildMap {
-                windows["rollingUsage"]?.let { w ->
-                    put("rolling.pct", w.usagePercent.toString())
-                    put("rolling.resetInSec", w.resetInSec.toString())
-                    w.usage?.let { put("rolling.usage", it.toString()) }
-                    w.limit?.let { put("rolling.limit", it.toString()) }
+                fiveHour?.let { w ->
+                    put("rolling.pct", w.usagePercent().toString())
+                    put("rolling.resetInSec", w.resetInSec().toString())
+                    w.usedUsd?.let { put("rolling.usage", it.toString()) }
+                    w.limitUsd?.let { put("rolling.limit", it.toString()) }
                 }
-                windows["weeklyUsage"]?.let { w ->
-                    put("weekly.pct", w.usagePercent.toString())
-                    put("weekly.resetInSec", w.resetInSec.toString())
-                    w.usage?.let { put("weekly.usage", it.toString()) }
-                    w.limit?.let { put("weekly.limit", it.toString()) }
+                week?.let { w ->
+                    put("weekly.pct", w.usagePercent().toString())
+                    put("weekly.resetInSec", w.resetInSec().toString())
+                    w.usedUsd?.let { put("weekly.usage", it.toString()) }
+                    w.limitUsd?.let { put("weekly.limit", it.toString()) }
                 }
-                windows["monthlyUsage"]?.let { w ->
-                    put("monthly.pct", w.usagePercent.toString())
-                    put("monthly.resetInSec", w.resetInSec.toString())
-                    w.usage?.let { put("monthly.usage", it.toString()) }
-                    w.limit?.let { put("monthly.limit", it.toString()) }
+                month?.let { w ->
+                    put("monthly.pct", w.usagePercent().toString())
+                    put("monthly.resetInSec", w.resetInSec().toString())
+                    w.usedUsd?.let { put("monthly.usage", it.toString()) }
+                    w.limitUsd?.let { put("monthly.limit", it.toString()) }
                 }
+                put("product", product)
+                put("planName", planName)
+                root["cancelAtPeriodEnd"]?.jsonPrimitive?.let { put("cancelAtPeriodEnd", it.content) }
+                root["useBalance"]?.jsonPrimitive?.let { put("useBalance", it.content) }
+                access["endsAt"]?.asLongOrNull()?.let { put("periodEnd", it.toString()) }
             }
 
             val balance = ServiceBalance(
                 service = ServiceType.OPENCODE_GO,
-                amount = primary.usagePercent.toDouble(),
+                amount = primary.usagePercent().toDouble(),
                 unit = "%",
                 isAvailable = true,
-                monthlySpent = windows["monthlyUsage"]?.usagePercent?.toDouble(),
-                totalQuota = null,
-                nextResetAt = System.currentTimeMillis() + primary.resetInSec * 1000L,
+                monthlySpent = month?.usedUsd,
+                totalQuota = month?.limitUsd,
+                nextResetAt = primary.resetsAt ?: month?.resetsAt,
                 extras = extras
             )
 
             balanceCache.put(ServiceType.OPENCODE_GO, balance)
             credentialRepository.save(credential.copy(lastVerifiedAt = System.currentTimeMillis()))
 
+            DebugLog.i(
+                TAG,
+                "go/status ok: 5h=${primary.usagePercent()}% plan=$planName " +
+                    "month=${month?.usedUsd ?: "-"}/${month?.limitUsd ?: "-"}"
+            )
             Result.success(balance)
         }
+    }
+
+    /**
+     * 解析会话 Cookie 值。
+     *
+     * 新版 Console 的会话 cookie 名是 `__Host-console_session`（生产）/ `console_session`（开发）。
+     * 兼容三种录入方式：
+     *  1. [Credential.SessionCredential.cookies] 里匹配到 session 名的项
+     *  2. [Credential.SessionCredential.authCookie]（用户在设置页粘贴的那一整串）
+     *  3. [Credential.SessionCredential.token]（早期字段）
+     *
+     * 用户也可能把整串 `name=value; name2=value2` 粘进 authCookie，这里顺带解析出主 cookie。
+     */
+    private fun resolveSessionCookie(credential: Credential.SessionCredential): String? {
+        // 先尝试从整串 cookie 里摘出 console_session
+        val raw = credential.authCookie
+        if (!raw.isNullOrBlank() && raw.contains('=')) {
+            val entry = raw.split(";")
+                .map { it.trim() }
+                .firstOrNull { it.startsWith("console_session=") || it.startsWith("__Host-console_session=") }
+            if (entry != null) {
+                return decodeToken(entry.substringAfter('='))
+            }
+        }
+
+        val candidates = listOfNotNull(
+            credential.cookies.firstOrNull { c ->
+                c.value.isNotBlank() && (
+                    c.name.contains("console_session", ignoreCase = true) ||
+                    c.name.contains("session", ignoreCase = true)
+                )
+            }?.value,
+            credential.authCookie?.takeIf { it.isNotBlank() && !it.contains('=') },
+            credential.token?.takeIf { it.isNotBlank() }
+        )
+        return candidates.firstOrNull { it.length >= 32 } ?: candidates.firstOrNull()
+    }
+
+    /** 组装 Cookie 头：主会话 cookie + 凭据中其余辅助 cookie（如 st_* 会话追踪 cookie） */
+    private fun buildCookieHeader(credential: Credential.SessionCredential, session: String): String {
+        val extras = credential.cookies
+            .filter { it.value.isNotBlank() && it.value != session }
+            .joinToString("; ") { "${it.name}=${it.value}" }
+        val main = "$SESSION_COOKIE_NAME=$session"
+        return if (extras.isBlank()) main else "$main; $extras"
     }
 
     /**
@@ -233,118 +370,96 @@ class OpenCodeGoRepository(
 
     companion object {
         private const val TAG = "OCGO"
+        private const val WEB_ORIGIN = "https://opencode.ai"
+
+        /** 新版 Console 的 Go 配额端点（tRPC，JSON） */
+        private const val GO_STATUS_API = "$WEB_ORIGIN/console/api/go/status"
         private const val MODELS_API = "https://models.dev/api.json"
         private const val CHAT_API = "https://opencode.ai/zen/go/v1/chat/completions"
-        private val SCRAPED_FIELDS = listOf("rollingUsage", "weeklyUsage", "monthlyUsage")
 
-        /**
-         * 解析 SolidJS SSR hydration 输出。匹配模式形如：
-         *   `rollingUsage:$R[0]={usagePercent:42,resetInSec:12345}`
-         *
-         * 用精确前缀 "field:$R[" 定位 hydration 数据中的字段声明，
-         * 避免命中 HTML 其他位置（如 JS 代码注释、模板字符串）的同名文本。
-         * 用括号计数匹配闭合 "}"，正确处理嵌套对象。
-         */
-        internal fun parseWindows(html: String): Map<String, ScrapedWindow> {
-            val result = mutableMapOf<String, ScrapedWindow>()
-            val fields = listOf("rollingUsage", "weeklyUsage", "monthlyUsage")
+        /** 生产环境会话 cookie 名（开发环境为 console_session） */
+        private const val SESSION_COOKIE_NAME = "__Host-console_session"
 
-            for (field in fields) {
-                // 精确模式：找 "field:$R[N]={" —— 这是 hydration 数据块的独有格式
-                val keyIdx = html.indexOf("$field:\$R[")
-                if (keyIdx < 0) continue
-
-                // 找 '=' 然后找 '{'
-                val eqIdx = html.indexOf('=', keyIdx)
-                if (eqIdx < 0 || eqIdx - keyIdx > 60) continue
-                val braceStart = html.indexOf('{', eqIdx)
-                if (braceStart < 0 || braceStart - eqIdx > 10) continue
-
-                // 括号计数找正确的闭合 "}"（处理嵌套对象）
-                val braceEnd = findMatchingBrace(html, braceStart) ?: continue
-                val body = html.substring(braceStart, braceEnd + 1)
-
-                val pct = extractNumberAfterKey(body, "usagePercent")?.toFloatOrNull()
-                val reset = extractNumberAfterKey(body, "resetInSec")?.toLongOrNull()
-                // usage/limit 是页面新增的用量与限额字段（单位以服务端定义为准，缺失不影响窗口识别）
-                // exactKey=true：避免 "usage" 误命中 "usagePercent" 前缀
-                val usage = extractNumberAfterKey(body, "usage", exactKey = true)?.toLongOrNull()
-                val limit = extractNumberAfterKey(body, "limit", exactKey = true)?.toLongOrNull()
-                if (pct != null && reset != null) {
-                    result[field] = ScrapedWindow(pct, reset, usage, limit)
-                }
-            }
-
-            return result
-        }
-
-        /**
-         * 从 openIdx（'{' 的位置）开始，用深度计数找匹配的闭合 '}'。
-         * 正确处理嵌套对象：`{status:"ok", sub:{...}, usagePercent:34}`。
-         */
-        private fun findMatchingBrace(s: String, openIdx: Int): Int? {
-            var depth = 0
-            for (i in openIdx until s.length) {
-                when (s[i]) {
-                    '{' -> depth++
-                    '}' -> {
-                        depth--
-                        if (depth == 0) return i
-                    }
-                }
-            }
-            return null
-        }
-
-        /**
-         * 在 body 字符串中找 "key:" 后面紧跟的数字（含可选小数）。返回数字字符串，未找到返回 null。
-         * 跳过 status 字符串值（"ok" 之类）。
-         *
-         * @param exactKey 为 true 时要求 key 后紧跟 ':'（精确字段匹配），
-         *                 避免 "usage" 误命中 "usagePercent" 这类前缀字段。
-         */
-        private fun extractNumberAfterKey(body: String, key: String, exactKey: Boolean = false): String? {
-            val keyIdx = if (exactKey) {
-                // 精确匹配：key 后必须紧跟 ':'（如 "usage:"），不能是 "usagePercent"
-                var idx = body.indexOf(key)
-                while (idx >= 0) {
-                    val after = idx + key.length
-                    if (after < body.length && body[after] == ':') break
-                    idx = body.indexOf(key, idx + 1)
-                }
-                idx
-            } else {
-                body.indexOf(key)
-            }
-            if (keyIdx < 0) return null
-            var i = keyIdx + key.length
-            // 跳过 ":" 后面所有非数字、非负号、非小数点字符
-            while (i < body.length) {
-                val c = body[i]
-                if (c.isDigit() || c == '-' || c == '.') break
-                i++
-            }
-            if (i >= body.length) return null
-            // 收集数字
-            val start = i
-            while (i < body.length) {
-                val c = body[i]
-                if (c.isDigit() || c == '.' || (c == '-' && i == start)) {
-                    i++
-                } else {
-                    break
-                }
-            }
-            return body.substring(start, i).ifEmpty { null }
-        }
-
-        internal data class ScrapedWindow(
-            val usagePercent: Float,
-            val resetInSec: Long,
-            val usage: Long? = null,
-            val limit: Long? = null
-        )
+        private const val DESKTOP_UA =
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
     }
+
+    /** 单个配额窗口（microCents 原始值 + 换算后的 USD） */
+    internal data class GoWindow(
+        val startsAt: Long?,
+        val resetsAt: Long?,
+        val usedMicroCents: Long?,
+        val limitMicroCents: Long?
+    ) {
+        val usedUsd: Double? = usedMicroCents?.let { it / MICRO_CENTS_PER_USD }
+        val limitUsd: Double? = limitMicroCents?.let { it / MICRO_CENTS_PER_USD }
+
+        /** 已用百分比；缺 limit 或 limit<=0 时返回 0 */
+        fun usagePercent(): Double {
+            val u = usedUsd ?: return 0.0
+            val l = limitUsd ?: return 0.0
+            if (l <= 0.0) return 0.0
+            return (u / l * 100.0).coerceIn(0.0, 100.0)
+        }
+
+        /** 距下次重置的秒数；缺 resetsAt 时返回 0 */
+        fun resetInSec(): Long {
+            val r = resetsAt ?: return 0L
+            return maxOf(0L, (r - System.currentTimeMillis()) / 1000)
+        }
+    }
+
+    /**
+     * 浏览器 DevTools 复制来的 cookie 值常带 URL 编码（如 `%2F` `%2B` `%3D`）。
+     * 原样发送时部分服务端会解不出 token，这里做一次解码，确保拿到原始值。
+     */
+    private fun decodeToken(raw: String): String {
+        val trimmed = raw.trim()
+        if (!trimmed.contains('%')) return trimmed
+        return try {
+            java.net.URLDecoder.decode(trimmed, "UTF-8")
+        } catch (_: Exception) {
+            trimmed
+        }
+    }
+}
+
+/** microCents → USD：1 USD = 100_000_000 microCents */
+private const val MICRO_CENTS_PER_USD = 100_000_000.0
+
+/**
+ * 解析一个配额窗口对象 `{startsAt?, resetsAt, limitMicroCents, usedMicroCents}`。
+ *
+ * microCents 字段在响应里可能是**字符串**（BigInt 序列化，如 `"1200000000"`）
+ * 也可能是数字，两种都要认；三个字段全缺时返回 null，表示该窗口不可用。
+ */
+internal fun JsonObject.toGoWindow(): OpenCodeGoRepository.GoWindow? {
+    val resetsAt = this["resetsAt"]?.asLongOrNull()
+    val used = this["usedMicroCents"]?.asLongOrNull()
+    val limit = this["limitMicroCents"]?.asLongOrNull()
+    if (resetsAt == null && used == null && limit == null) return null
+    return OpenCodeGoRepository.GoWindow(
+        startsAt = this["startsAt"]?.asLongOrNull(),
+        resetsAt = resetsAt,
+        usedMicroCents = used,
+        limitMicroCents = limit
+    )
+}
+
+/** JsonElement → Long，兼容字符串与数字两种表示 */
+internal fun JsonElement.asLongOrNull(): Long? = when (this) {
+    is JsonPrimitive -> content.trim().toLongOrNull()
+    else -> null
+}
+
+/** JsonElement → Boolean，兼容字符串与数字两种表示 */
+internal fun JsonElement.asBoolean(): Boolean? = when (this) {
+    is JsonPrimitive -> when (content.trim().lowercase()) {
+        "true", "1" -> true
+        "false", "0" -> false
+        else -> null
+    }
+    else -> null
 }
 
 /**

@@ -8,12 +8,15 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.IOException
+import java.net.URLDecoder
 import java.text.SimpleDateFormat
 import java.util.Base64
 import java.util.Locale
@@ -24,11 +27,16 @@ import javax.inject.Singleton
  * CommandCode Go 用量记录仓库。
  *
  * 调 JSON API 分页抓取 usage 记录：
- *   GET https://api.commandcode.ai/internal/usage?limit=50
- *   GET https://api.commandcode.ai/internal/usage?limit=50&cursor=<base64>
+ *   GET https://api.commandcode.ai/internal/usage?limit=100
+ *   GET https://api.commandcode.ai/internal/usage?limit=100&cursor=<服务端返回的 nextCursor>
  *
- * cursor 是末条记录的 { createdAt, id } 的 base64 编码。
- * 第一页不用 cursor。
+ * 2026-09 接口变更（旧版代码仍按老字段解析，会静默解析出全 0 的记录）：
+ *  - 单条记录不再返回 `creditsTotal` / `tokensTotal`，费用改在 `meta.totalCost`（**单位 USD**）
+ *  - 响应顶层新增 `nextCursor`（不透明字符串），翻页必须用服务端给的游标，
+ *    自己用 `{createdAt,id}` 拼 base64 的做法已失效
+ *  - `tokensIn` / `tokensOut` 仍是字符串数字
+ *
+ * cursor=null 为最新页。返回 (记录列表, 下一页游标)；游标为 null 表示已到底。
  */
 @Singleton
 class CommandCodeUsageRepository(
@@ -44,20 +52,48 @@ class CommandCodeUsageRepository(
         const val COST_DENOM = 100_000_000L
         /** CCGO 用量数据在 UsageCache 中的 workspaceId 区分键 */
         const val CCGO_WORKSPACE_ID = "commandcode"
+
+        /** CommandCode 会话 cookie 名（better-auth） */
+        private const val SESSION_COOKIE_NAME = "__Secure-commandcode_prod_.session_token"
     }
 
+    /**
+     * 组装 Cookie 头。
+     *
+     * CommandCode 2026 起改用 better-auth 会话鉴权，cookie 名为
+     * `__Secure-commandcode_prod_.session_token`。用户从 DevTools 复制出来的值
+     * 常带 URL 编码（`%2F` `%2B` `%3D`），这里统一解码一次再发。
+     */
     private suspend fun getCookieHeader(): String {
         val c = credentialRepository.get(ServiceType.COMMANDCODE_GO)
-            ?: throw RepositoryError.InvalidCredential()
+            ?: throw RepositoryError.InvalidCredential("未找到 CommandCode 凭据")
         if (c !is Credential.SessionCredential) {
-            throw RepositoryError.InvalidCredential()
+            throw RepositoryError.InvalidCredential("凭据类型不匹配")
         }
-        // 优先用 cookies 列表，否则尝试从 authCookie 字段解析
-        if (c.cookies.isNotEmpty()) {
-            return c.cookies.joinToString("; ") { "${it.name}=${it.value}" }
+
+        val entries = c.cookies.filter { it.value.isNotBlank() }
+        if (entries.isNotEmpty()) {
+            return entries.joinToString("; ") { "${it.name}=${decodeToken(it.value)}" }
         }
-        // fallback: 如果用户通过旧版接口存了 authCookie，尝试恢复
-        throw RepositoryError.InvalidCredential()
+
+        // 旧版只存了 authCookie 的场景：补一个 session_token 名再发
+        val raw = c.authCookie?.takeIf { it.isNotBlank() } ?: c.token?.takeIf { it.isNotBlank() }
+            ?: throw RepositoryError.InvalidCredential(
+                "缺少会话 Cookie。请在浏览器登录 commandcode.ai 并从 DevTools → Application → Cookies " +
+                "复制 __Secure-commandcode_prod_.session_token 的值"
+            )
+        return "$SESSION_COOKIE_NAME=${decodeToken(raw)}"
+    }
+
+    /** DevTools 复制的 cookie 值可能带 URL 编码，解码一次确保服务端能解出 token */
+    private fun decodeToken(raw: String): String {
+        val trimmed = raw.trim()
+        if (!trimmed.contains('%')) return trimmed
+        return try {
+            URLDecoder.decode(trimmed, "UTF-8")
+        } catch (_: Exception) {
+            trimmed
+        }
     }
 
     /**
@@ -73,17 +109,20 @@ class CommandCodeUsageRepository(
                 return@withContext Result.failure(e)
             }
 
+            // 用 OkHttp 的 HttpUrl 构造，避免游标里的特殊字符被破坏
             val url = buildString {
-                append("$apiBase/internal/usage?limit=$PAGE_SIZE")
-                if (cursor != null) append("&cursor=$cursor")
-            }
+                append("$apiBase/internal/usage")
+            }.toHttpUrl().newBuilder()
+                .addQueryParameter("limit", PAGE_SIZE.toString())
+                .apply { if (cursor != null) addQueryParameter("cursor", cursor) }
+                .build()
 
             val request = Request.Builder()
                 .url(url)
                 .header("Cookie", cookieHeader)
                 .header("Accept", "application/json")
                 .header("Origin", "https://commandcode.ai")
-                .header("Referer", "https://commandcode.ai/")
+                .header("Referer", "https://commandcode.ai/settings/usage")
                 .get()
                 .build()
 
@@ -116,6 +155,9 @@ class CommandCodeUsageRepository(
 
     /**
      * 解析 JSON 响应。
+     *
+     * 翻页游标优先用服务端返回的 `nextCursor`（不透明字符串）；
+     * 缺失时回退到按 `records.size >= PAGE_SIZE` 判断到底。
      */
     private fun parseUsageResponse(body: String): Pair<List<UsageRecord>, String?> {
         val root = json.parseToJsonElement(body).jsonObject
@@ -126,11 +168,13 @@ class CommandCodeUsageRepository(
             parseUsageObject(obj)
         }
 
-        // 从最后一条记录计算下一页 cursor
-        val nextCursor = if (records.size >= PAGE_SIZE) {
-            val last = records.last()
-            encodeCursor(last.id, last.timeCreated)
-        } else null
+        val nextCursor = root["nextCursor"]?.jsonPrimitive?.contentOrNull
+            ?.takeIf { it.isNotBlank() }
+            ?: if (records.size >= PAGE_SIZE) {
+                records.lastOrNull()?.let { encodeCursor(it.id, it.timeCreated) }
+            } else {
+                null
+            }
 
         return records to nextCursor
     }
@@ -142,12 +186,14 @@ class CommandCodeUsageRepository(
 
         val tokensIn = obj["tokensIn"]?.jsonPrimitive?.content?.toLongOrNull() ?: 0L
         val tokensOut = obj["tokensOut"]?.jsonPrimitive?.content?.toLongOrNull() ?: 0L
-        val tokensTotal = obj["tokensTotal"]?.jsonPrimitive?.content?.toLongOrNull() ?: 0L
 
-        val creditsTotal = obj["creditsTotal"]?.jsonPrimitive?.content?.toDoubleOrNull() ?: 0.0
-        val cost = (creditsTotal * COST_DENOM).toLong()
-
+        // 2026-09：creditsTotal 已下线，费用改由 meta.totalCost 给出（单位 USD）
         val meta = obj["meta"]?.jsonObject
+        val totalCostUsd = meta?.get("totalCost")?.jsonPrimitive?.content?.toDoubleOrNull()
+            ?: obj["creditsTotal"]?.jsonPrimitive?.content?.toDoubleOrNull()   // 兼容旧字段
+            ?: 0.0
+        val cost = (totalCostUsd * COST_DENOM).toLong()
+
         val model = meta?.get("model")?.jsonPrimitive?.content ?: ""
         val provider = meta?.get("provider")?.jsonPrimitive?.content ?: ""
         val cacheReadInputTokens = meta?.get("cacheReadInputTokens")?.jsonPrimitive?.content?.toLongOrNull() ?: 0L

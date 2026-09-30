@@ -65,10 +65,10 @@ class CommandCodeGoRepository(
             )
         }
 
-        // 从订阅信息拿计划名称，查 plan catalog 拿总量
-        val monthlyTotal = subResult.getOrNull()?.let { sub ->
-            PLANS[sub.planId.lowercase()]
-        }
+        // 周期总量优先用服务端返回的 monthlyCreditsGranted（2026-09 新增字段），
+        // 拿不到时回退到本地 plan catalog，避免套餐调整后百分比失真
+        val monthlyTotal = creditsPayload.monthlyCreditsGranted
+            ?: subResult.getOrNull()?.let { sub -> PLANS[sub.planId.lowercase()] }
         val billingPeriodEndMillis = subResult.getOrNull()?.let { parseIsoToEpoch(it.currentPeriodEnd) }
 
         val config = ServiceConfigProvider.get(ServiceType.COMMANDCODE_GO)
@@ -205,6 +205,8 @@ class CommandCodeGoRepository(
             freeCredits = getDouble(credits, "freeCredits").takeIf { it != 0.0 }
                 ?: (getDouble(credits, "premiumMonthlyCredits") +
                     getDouble(credits, "opensourceMonthlyCredits")),
+            // 2026-09 新增：周期内发放的额度，用于算"已用/总量"百分比
+            monthlyCreditsGranted = getDouble(credits, "monthlyCreditsGranted").takeIf { it > 0.0 },
             fiveHourUsed = fiveHour?.let { getDouble(it, "used") },
             fiveHourCap = fiveHour?.let { getDouble(it, "cap") },
             fiveHourResetAt = fiveHour?.let { getLong(it, "resetAt") },
@@ -254,7 +256,9 @@ class CommandCodeGoRepository(
 
         private val PLANS = mapOf(
             "individual-go" to 10.0,
-            "individual-goat" to 60.0,
+            // 服务端 /internal/billing/credits 返回 monthlyCreditsGranted=70（2026-09 实测），
+            // 旧值 60 会让 totalQuota 偏小、用量百分比虚高
+            "individual-goat" to 70.0,
             "individual-pro" to 30.0,
             "individual-max" to 150.0,
             "individual-ultra" to 300.0
@@ -286,6 +290,8 @@ class CommandCodeGoRepository(
         val monthlyCredits: Double,
         val purchasedCredits: Double,
         val freeCredits: Double,
+        /** 周期内发放的总额度（服务端字段 monthlyCreditsGranted），null 表示服务端未返回 */
+        val monthlyCreditsGranted: Double?,
         val fiveHourUsed: Double?,
         val fiveHourCap: Double?,
         val fiveHourResetAt: Long?,
