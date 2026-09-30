@@ -33,8 +33,11 @@ class OpenCodeGoRepositoryTest {
         resetsAt: Long = 1790945494815L
     ): String {
         fun window(used: Double?, limit: Double?, withStarts: Boolean): String {
-            val usedPart = used?.let { "\"usedMicroCents\":\"${(it * 100_000_000).toLong()}\"" } ?: "null"
-            val limitPart = limit?.let { "\"limitMicroCents\":\"${(it * 100_000_000).toLong()}\"" } ?: "null"
+            // 键名必须保留，只让值变成 null（模拟服务端字段存在但无值）
+            val usedPart = used?.let { "\"usedMicroCents\":\"${(it * 100_000_000).toLong()}\"" }
+                ?: "\"usedMicroCents\":null"
+            val limitPart = limit?.let { "\"limitMicroCents\":\"${(it * 100_000_000).toLong()}\"" }
+                ?: "\"limitMicroCents\":null"
             val starts = if (withStarts) "\"startsAt\":1790675391700," else ""
             return """{$starts"resetsAt":$resetsAt,$usedPart,$limitPart}"""
         }
