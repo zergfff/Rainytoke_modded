@@ -77,9 +77,17 @@ class WeatherRepository @Inject constructor(
                 }
 
                 // 2. Geo lookup（v2 city/lookup，按经纬度反查城市）
+                // 凭据支持 API KEY（?key=）与 JWT（Authorization: Bearer）。
+                // QWeather 从 2027-02 起逐步限制 API KEY，JWT 是官方推荐方式。
+                val jwt = isJwtCredential(apiKey)
+                val authQuery = if (jwt) "" else "&key=$apiKey"
+                val bearer = if (jwt) apiKey else null
+
+                val lonText = "%.2f".format(lon)
+                val latText = "%.2f".format(lat)
                 val geoUrl = "https://$host/geo/v2/city/lookup" +
-                    "?location=${"%.2f".format(lon)},${"%.2f".format(lat)}&key=$apiKey"
-                val geoBody = httpGet(geoUrl) ?: return@withContext null
+                    "?location=$lonText,$latText$authQuery"
+                val geoBody = httpGet(geoUrl, bearer) ?: return@withContext null
                 val geoJson = JSONObject(geoBody)
                 if (geoJson.optString("code") != "200") return@withContext null
 
@@ -92,8 +100,8 @@ class WeatherRepository @Inject constructor(
 
                 // 3. 实时天气 v7
                 val weatherUrl = "https://$host/v7/weather/now" +
-                    "?location=$cityId&key=$apiKey&lang=zh"
-                val weatherBody = httpGet(weatherUrl) ?: return@withContext null
+                    "?location=$cityId&lang=zh$authQuery"
+                val weatherBody = httpGet(weatherUrl, bearer) ?: return@withContext null
                 val weatherJson = JSONObject(weatherBody)
                 if (weatherJson.optString("code") != "200") return@withContext null
 
@@ -110,18 +118,31 @@ class WeatherRepository @Inject constructor(
         }
     }
 
-    private fun httpGet(url: String): String? {
+    private fun httpGet(url: String, bearer: String? = null): String? {
         val request = Request.Builder()
             .url(url)
             .header("Accept", "application/json")
+            .apply { bearer?.let { header("Authorization", "Bearer $it") } }
             .get()
             .build()
         val response = okHttpClient.newCall(request).execute()
         return try {
-            if (!response.isSuccessful) null else response.body?.string()
+            val body = response.body?.string()
+            if (!response.isSuccessful) {
+                android.util.Log.w(TAG, "QWeather HTTP ${response.code}: ${body?.take(200)}")
+                null
+            } else {
+                body
+            }
         } finally {
             response.close()
         }
+    }
+
+    /** QWeather JWT 形如 `eyJ...header.eyJ...payload.signature`（三段、点分隔）。 */
+    internal fun isJwtCredential(credential: String): Boolean {
+        val parts = credential.trim().split('.')
+        return parts.size == 3 && parts.all { it.isNotBlank() } && parts[0].startsWith("eyJ")
     }
 
     @SuppressLint("MissingPermission")
