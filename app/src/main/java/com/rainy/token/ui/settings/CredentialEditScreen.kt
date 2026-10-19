@@ -726,6 +726,7 @@ private fun OpenDesignForm(
     }
 }
 
+@Composable
 private fun ManualCookieForm(
     cookieValue: String,
     onCookieChange: (String) -> Unit,
