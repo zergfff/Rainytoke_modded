@@ -9,11 +9,13 @@ import com.rainy.token.domain.service.ServiceType
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.longOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONArray
@@ -124,20 +126,24 @@ class OpenDesignRepository @Inject constructor(
                 )
             )
 
-        val planName = fetchPlanName(cookie, workspaceId)
+        val summary = fetchBillingSummary(cookie, bearer = null)
+        val planName = summary?.plan?.takeIf { it.isNotBlank() }?.let { planDisplayName(it) }
+            ?: fetchPlanName(cookie, workspaceId)
+        val windows = fetchCodingPlanWindows(cookie, workspaceId)
         val config = ServiceConfigProvider.get(ServiceType.OPEN_DESIGN)
 
         val allocatedUsd = parsed.allocatedUsd
         val spentUsd = allocatedUsd
             ?.takeIf { it >= parsed.balanceUsd }
             ?.minus(parsed.balanceUsd)
+        val amountUsd = summary?.availableUsd ?: parsed.balanceUsd
 
         val extras = buildMap {
             planName?.let {
                 put("plan", it)
                 put("planName", it)
             }
-            put("monthlyRemaining", parsed.balanceUsd.toString())
+            put("monthlyRemaining", amountUsd.toString())
             allocatedUsd?.takeIf { it > 0 }?.let {
                 put("monthlyTotal", it.toString())
             }
@@ -145,6 +151,7 @@ class OpenDesignRepository @Inject constructor(
             parsed.subscriptionUsd?.let { put("subscriptionUsd", it.toString()) }
             parsed.lowBalanceState?.let { put("lowBalanceState", it) }
             put("workspaceId", workspaceId)
+            summary?.status?.let { put("subscriptionStatus", it) }
             parsed.periodEndAt?.let { iso ->
                 put("billingPeriodEnd", iso)
                 parseIsoMillis(iso)?.let { end ->
@@ -152,16 +159,22 @@ class OpenDesignRepository @Inject constructor(
                     put("monthly.resetInSec", resetInSec.toString())
                 }
             }
+            windows.forEach { window ->
+                val prefix = window.extraPrefix() ?: return@forEach
+                put("$prefix.used", window.usedPercent().toString())
+                put("$prefix.cap", "100")
+                window.resetInSec()?.let { put("$prefix.resetInSec", it.toString()) }
+            }
         }
 
         val balance = ServiceBalance(
             service = ServiceType.OPEN_DESIGN,
-            amount = parsed.balanceUsd,
+            amount = amountUsd,
             unit = config.displayUnit,
-            isAvailable = true,
-            monthlySpent = spentUsd,
+            isAvailable = summary?.status?.equals("active", true) ?: true,
+            monthlySpent = summary?.consumedUsd ?: spentUsd,
             totalQuota = allocatedUsd,
-            nextResetAt = parsed.periodEndAt?.let { parseIsoMillis(it) },
+            nextResetAt = summary?.periodEndMillis ?: parsed.periodEndAt?.let { parseIsoMillis(it) },
             extras = extras
         )
 
@@ -175,11 +188,46 @@ class OpenDesignRepository @Inject constructor(
         Result.success(balance)
     }
 
-    /** 用桌面客户端的 control key 调 `/v1/me`（官方客户端同款鉴权），失败再由上层退回 Cookie。 */
+    /** 用桌面客户端的 control key 调官方计费接口（与客户端同款鉴权）。 */
     private fun fetchWithControlKey(
         controlKey: String,
         cookie: String
     ): Result<ServiceBalance> {
+        // /v1/me.plan 是历史字段（当前账号返回 "free"），真实套餐在 billing summary 的
+        // membershipTier（go/plus/pro/max），周期结束时间也在同一条响应里。
+        val summaryBody = getJson(
+            url = "$API_BASE/v1/billing/summary?fresh=true",
+            cookie = cookie,
+            workspaceId = null,
+            bearer = controlKey
+        ).getOrNull()
+
+        summaryBody?.let { body ->
+            val summary = parseBillingSummary(body)
+            if (summary != null && summary.plan != null) {
+                val plan = planDisplayName(summary.plan)
+                val extras = buildMap {
+                    put("plan", plan)
+                    put("planName", plan)
+                    put("monthlyRemaining", summary.availableUsd.toString())
+                    put("authMode", "control_key")
+                    summary.status?.let { put("subscriptionStatus", it) }
+                    summary.interval?.let { put("billingInterval", it) }
+                }
+                return Result.success(
+                    ServiceBalance(
+                        service = ServiceType.OPEN_DESIGN,
+                        amount = summary.availableUsd,
+                        unit = ServiceConfigProvider.get(ServiceType.OPEN_DESIGN).displayUnit,
+                        isAvailable = summary.status?.equals("active", true) ?: true,
+                        monthlySpent = summary.consumedUsd,
+                        nextResetAt = summary.periodEndMillis,
+                        extras = extras
+                    )
+                )
+            }
+        }
+
         val body = getJson(
             url = "$API_BASE/v1/me",
             cookie = cookie,
@@ -273,6 +321,23 @@ class OpenDesignRepository @Inject constructor(
         }
         return null
     }
+
+    /** 个人订阅摘要：真实套餐、可用额度、周期结束时间。 */
+    private fun fetchBillingSummary(cookie: String, bearer: String?): ParsedBillingSummary? =
+        getJson(
+            url = "$API_BASE/v1/billing/summary?fresh=true",
+            cookie = cookie,
+            workspaceId = null,
+            bearer = bearer
+        ).getOrNull()?.let { parseBillingSummary(it) }
+
+    /** Coding Plan 5h / 7d 窗口（官方控制台同款接口，需要会话 Cookie）。 */
+    private fun fetchCodingPlanWindows(cookie: String, workspaceId: String): List<CodingPlanWindow> =
+        getJson(
+            url = "$API_BASE/v1/workspaces/$workspaceId/billing/coding-plan-usage",
+            cookie = cookie,
+            workspaceId = workspaceId
+        ).getOrNull()?.let { parseCodingPlanUsage(it) }.orEmpty()
 
     /** 余额接口不带套餐信息，额外查一次 dashboard（失败不影响余额）。 */
     private fun fetchPlanName(cookie: String, workspaceId: String): String? = runCatching {
@@ -457,6 +522,97 @@ internal fun parseWalletBalance(body: String): Double? = runCatching {
     val wallet = (root["wallet"] as? JsonObject) ?: (root["data"] as? JsonObject) ?: root
     (wallet["balanceUsd"] as? JsonPrimitive)?.doubleOrNull
 }.getOrNull()
+
+/** `/v1/billing/summary`（control key 鉴权）里的套餐与额度字段。 */
+internal data class ParsedBillingSummary(
+    val plan: String?,
+    val availableUsd: Double,
+    val consumedUsd: Double?,
+    val status: String?,
+    val interval: String?,
+    val periodEndMillis: Long?
+)
+
+/**
+ * 解析 `GET /api/v1/billing/summary`。
+ *
+ * 关键字段：`membershipTier`（真实套餐）、`balances.totalAvailableCreditsUsd`、
+ * `totalConsumedUsd`、`subscriptionCurrentPeriodEnd`。`/v1/me.plan` 不可用于套餐判断。
+ */
+internal fun parseBillingSummary(body: String): ParsedBillingSummary? = runCatching {
+    if (body.isBlank()) return@runCatching null
+    val root = openDesignJson.parseToJsonElement(body).jsonObject
+    fun num(key: String): Double? = (root[key] as? JsonPrimitive)?.doubleOrNull
+    fun text(key: String): String? = (root[key] as? JsonPrimitive)?.contentOrNull
+
+    val plan = text("membershipTier")?.takeIf { it.isNotBlank() }
+    val available = num("totalAvailableCreditsUsd")
+        ?: num("balanceUsd")
+        ?: return@runCatching null
+
+    ParsedBillingSummary(
+        plan = plan,
+        availableUsd = available,
+        consumedUsd = num("totalConsumedUsd"),
+        status = text("subscriptionStatus")?.takeIf { it.isNotBlank() },
+        interval = text("billingInterval")?.takeIf { it.isNotBlank() },
+        periodEndMillis = text("subscriptionCurrentPeriodEnd")
+            ?.let { raw -> runCatching { java.time.Instant.parse(raw).toEpochMilli() }.getOrNull() }
+    )
+}.getOrNull()
+
+/**
+ * Coding Plan 的一个用量窗口（5 小时 / 7 天）。
+ *
+ * 响应形状（控制台 bundle 的消费方确认）：
+ * `windows: [{ policyId, durationSeconds, remainingCredits, limitCredits, resetsAt }]`
+ */
+internal data class CodingPlanWindow(
+    val durationSeconds: Long?,
+    val remaining: Double,
+    val limit: Double,
+    val resetsAt: String?
+) {
+    /** 映射到 UI 使用的窗口 key；无法识别时返回 null。 */
+    fun extraPrefix(): String? = when {
+        durationSeconds == null -> null
+        durationSeconds in 17_000L..19_000L -> "fiveHour"
+        durationSeconds in 590_000L..620_000L -> "weekly"
+        else -> null
+    }
+
+    /** 已用百分比（0-100），UI 按 used/cap 绘制进度条。 */
+    fun usedPercent(): Double {
+        if (limit <= 0) return 0.0
+        return (((limit - remaining) / limit) * 100).coerceIn(0.0, 100.0)
+    }
+
+    fun resetInSec(): Long? = resetsAt?.let { raw ->
+        runCatching {
+            (java.time.Instant.parse(raw).toEpochMilli() - System.currentTimeMillis()) / 1000
+        }.getOrNull()?.coerceAtLeast(0)
+    }
+}
+
+internal fun parseCodingPlanUsage(body: String): List<CodingPlanWindow> = runCatching {
+    if (body.isBlank()) return@runCatching emptyList()
+    val root = openDesignJson.parseToJsonElement(body).jsonObject
+    val windows = root["windows"] as? JsonArray ?: return@runCatching emptyList()
+    windows.mapNotNull { element ->
+        val obj = element as? JsonObject ?: return@mapNotNull null
+        val remaining = (obj["remainingCredits"] as? JsonPrimitive)?.doubleOrNull
+            ?: return@mapNotNull null
+        val limit = (obj["limitCredits"] as? JsonPrimitive)?.doubleOrNull
+            ?: return@mapNotNull null
+        CodingPlanWindow(
+            durationSeconds = (obj["durationSeconds"] as? JsonPrimitive)?.longOrNull,
+            remaining = remaining,
+            limit = limit,
+            resetsAt = (obj["resetsAt"] as? JsonPrimitive)?.contentOrNull
+        )
+    }
+}.getOrDefault(emptyList())
+
 
 
 

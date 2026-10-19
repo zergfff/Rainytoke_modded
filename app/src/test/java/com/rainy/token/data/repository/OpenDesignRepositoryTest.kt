@@ -3,6 +3,7 @@ package com.rainy.token.data.repository
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -111,5 +112,57 @@ class OpenDesignRepositoryTest {
             1e-9
         )
         assertNull(parseWalletBalance("""{"updatedAt":"2026-10-19T00:00:00Z"}"""))
+    }
+
+    @Test
+    fun `billing summary reports go plan and period end`() {
+        val summary = parseBillingSummary(
+            """
+            {
+              "balanceUsd": "1.0000",
+              "creditsPerUsd": 10000,
+              "balances": { "subscriptionCredits": 10000, "rechargeCredits": 0, "totalAvailableCredits": 10000 },
+              "totalAvailableCreditsUsd": 1.0,
+              "membershipTier": "go",
+              "billingInterval": "yearly",
+              "subscriptionStatus": "active",
+              "subscriptionCurrentPeriodEnd": "2027-10-15T17:14:56.000Z",
+              "totalConsumedUsd": 0.0
+            }
+            """.trimIndent()
+        )
+
+        assertNotNull(summary)
+        assertEquals("go", summary!!.plan)
+        assertEquals(1.0, summary.availableUsd, 1e-9)
+        assertEquals(0.0, summary.consumedUsd!!, 1e-9)
+        assertEquals("active", summary.status)
+        assertEquals(java.time.Instant.parse("2027-10-15T17:14:56.000Z").toEpochMilli(), summary.periodEndMillis)
+    }
+
+    @Test
+    fun `coding plan usage maps 5h and 7d windows`() {
+        val windows = parseCodingPlanUsage(
+            """
+            {
+              "windows": [
+                { "policyId": "p5h", "durationSeconds": 18000, "remainingCredits": 8100, "limitCredits": 10000, "resetsAt": "2026-10-19T08:30:00.000Z" },
+                { "policyId": "p7d", "durationSeconds": 604800, "remainingCredits": 9100, "limitCredits": 10000, "resetsAt": "2026-10-24T06:00:00.000Z" }
+              ]
+            }
+            """.trimIndent()
+        )
+
+        assertEquals(2, windows.size)
+        assertEquals("fiveHour", windows[0].extraPrefix())
+        assertEquals(19.0, windows[0].usedPercent(), 1e-9)
+        assertEquals("weekly", windows[1].extraPrefix())
+        assertEquals(9.0, windows[1].usedPercent(), 1e-9)
+    }
+
+    @Test
+    fun `coding plan usage tolerates missing windows`() {
+        assertTrue(parseCodingPlanUsage("{}").isEmpty())
+        assertTrue(parseCodingPlanUsage("not json").isEmpty())
     }
 }
