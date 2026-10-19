@@ -371,10 +371,11 @@ class CredentialEditViewModel @Inject constructor(
 
     fun saveOpenDesignSession() {
         val current = _uiState.value
-        val cookies = if (current.cookieInput.isBlank()) {
+        val rawCookie = normalizeOpenDesignCookieInput(current.cookieInput)
+        val cookies = if (rawCookie.isBlank()) {
             emptyList()
         } else {
-            parseCookieString(current.cookieInput)
+            parseCookieString(rawCookie)
         }
         if (current.apiKey.isBlank() && cookies.isEmpty()) {
             _uiState.update { it.copy(message = UiText.Resource(R.string.error_cookie_empty)) }
@@ -398,10 +399,11 @@ class CredentialEditViewModel @Inject constructor(
 
     fun testAndSaveOpenDesign() {
         val current = _uiState.value
-        val cookies = if (current.cookieInput.isBlank()) {
+        val rawCookie = normalizeOpenDesignCookieInput(current.cookieInput)
+        val cookies = if (rawCookie.isBlank()) {
             emptyList()
         } else {
-            parseCookieString(current.cookieInput)
+            parseCookieString(rawCookie)
         }
         if (current.apiKey.isBlank() && cookies.isEmpty()) {
             _uiState.update { it.copy(message = UiText.Resource(R.string.error_cookie_empty)) }
@@ -443,6 +445,17 @@ class CredentialEditViewModel @Inject constructor(
             lastVerifiedAt = System.currentTimeMillis()
         )
         credentialRepository.save(updated)
+    }
+
+    /**
+     * 允许用户只粘贴 session token 的值：没有 `name=` 时补上 better-auth 的默认 Cookie 名。
+     * 值本身可能含 `%2B` / `%3D`，不需要解码。
+     */
+    private fun normalizeOpenDesignCookieInput(input: String): String {
+        val trimmed = input.trim()
+        if (trimmed.isBlank()) return ""
+        if (trimmed.contains('=')) return trimmed
+        return "__Secure-better-auth.session_token=$trimmed"
     }
 
     fun saveCodexAuthJson() {
