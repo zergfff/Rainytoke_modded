@@ -30,8 +30,21 @@ class WebViewSessionSaver @Inject constructor(
         token: String? = null,
         expiresAt: Long? = null
     ): Credential.SessionCredential? {
-        val cookieString = CookieManager.getInstance().getCookie(url) ?: return null
-        val cookies = parseCookieString(cookieString)
+        // Open Design 的控制台页面与 API 分属两个域，登录后的会话 Cookie 可能落在
+        // amr-api.open-design.ai 上，所以两个域都抓一遍再合并。
+        val urls = buildList {
+            add(url)
+            if (service == ServiceType.OPEN_DESIGN) {
+                add("https://amr-api.open-design.ai")
+                add("https://open-design.ai")
+            }
+        }
+        val cookies = urls
+            .flatMap { target ->
+                val cookieString = CookieManager.getInstance().getCookie(target)
+                if (cookieString.isNullOrBlank()) emptyList() else parseCookieString(cookieString)
+            }
+            .distinctBy { it.name to it.value }
         if (cookies.isEmpty() && token == null) return null
 
         val session = Credential.SessionCredential(
@@ -39,6 +52,11 @@ class WebViewSessionSaver @Inject constructor(
             cookies = cookies,
             token = token,
             expiresAt = expiresAt,
+            workspaceId = if (service == ServiceType.OPEN_DESIGN) {
+                extractWorkspaceId(url)
+            } else {
+                null
+            },
             lastVerifiedAt = System.currentTimeMillis()
         )
         // 用 runBlocking 写凭据 —— 调用方在 Composable 中，可以接受
@@ -47,6 +65,13 @@ class WebViewSessionSaver @Inject constructor(
         }
         return session
     }
+
+    private fun extractWorkspaceId(url: String): String? =
+        Regex("[?&]workspaceId=([^&#]+)")
+            .find(url)
+            ?.groupValues
+            ?.getOrNull(1)
+            ?.takeIf { it.isNotBlank() }
 
     /**
      * 把 `name1=value1; name2=value2` 解析为 [CookieEntry] 列表。

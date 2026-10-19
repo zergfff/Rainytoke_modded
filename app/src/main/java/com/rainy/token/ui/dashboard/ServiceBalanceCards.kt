@@ -561,6 +561,7 @@ internal fun secondaryLineRes(card: DashboardCardUi): Int = when (card.service) 
     ServiceType.MIMO -> R.string.service_desc_mimo
     ServiceType.MINIMAX -> R.string.service_desc_minimax
     ServiceType.ALIBABA -> R.string.service_desc_alibaba
+    ServiceType.OPEN_DESIGN -> R.string.service_desc_open_design
 }
 
 /**

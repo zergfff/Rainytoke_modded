@@ -180,5 +180,21 @@ fun ServiceIcon(
                 )
             }
         }
+        ServiceType.OPEN_DESIGN -> {
+            // 官方 brand-symbol.svg 转 VectorDrawable：黑底图形，深色模式反白
+            Box(
+                modifier = modifier.size(size.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Image(
+                    painter = painterResource(id = R.drawable.ic_open_design_logo),
+                    contentDescription = service.displayName,
+                    modifier = Modifier.fillMaxSize(),
+                    colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(
+                        if (isSystemInDarkTheme()) Color.White else Color(0xFF202020)
+                    )
+                )
+            }
+        }
     }
 }

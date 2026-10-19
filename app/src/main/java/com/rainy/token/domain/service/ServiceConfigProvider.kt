@@ -101,6 +101,15 @@ object ServiceConfigProvider {
             method = FetchMethod.REST_API,
             loginUrl = "",
             displayUnit = "%"
+        ),
+
+        // Open Design Cloud：控制台没有给第三方开放的余额 API Key，
+        // 只能复用浏览器登录后的 better-auth 会话 Cookie 调 /credits/me。
+        ServiceType.OPEN_DESIGN to ServiceConfig(
+            type = ServiceType.OPEN_DESIGN,
+            method = FetchMethod.WEBVIEW_SCRAPER,
+            loginUrl = "https://open-design.ai/cloud/login",
+            displayUnit = "$"
         )
     )
 

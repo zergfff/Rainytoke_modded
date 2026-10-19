@@ -598,4 +598,10 @@
     <string name="service_desc_mimo">Cookie 抓取 · Token 套餐</string>
     <string name="service_desc_minimax">JSON API · Coding 套餐</string>
     <string name="service_desc_alibaba">RPC · Coding Plan 配额</string>
+    <string name="service_desc_open_design">Cookie 抓取 · Cloud 余额</string>
+    <string name="open_design_title">Open Design Cloud 凭据</string>
+    <string name="open_design_hint">在浏览器登录 open-design.ai 后，从 DevTools → Application → Cookies 复制 open-design.ai 与 amr-api.open-design.ai 下的 Cookie（至少包含 better-auth 会话 Cookie），粘贴到下方。</string>
+    <string name="open_design_workspace">Workspace ID（可留空自动识别）</string>
+    <string name="open_design_workspace_hint">控制台地址栏 ?workspaceId= 后面的值，例如 rfxc8j91vq31t3mvxzvir2l0。留空时 APP 会自动读取当前工作区。</string>
+    <string name="open_design_saved">已保存 Open Design 凭据</string>
 </resources>

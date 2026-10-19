@@ -180,7 +180,8 @@ fun ServiceDetailScreen(
                 ServiceType.KIMI,
                 ServiceType.MIMO,
                 ServiceType.MINIMAX,
-                ServiceType.ALIBABA -> {
+                ServiceType.ALIBABA,
+                ServiceType.OPEN_DESIGN -> {
                     // 这三个返回的都是通用窗口（5h / 周 / 月），复用 CommandCode 的展示卡
                     item { CommandCodeGoUsageCard(uiState.state) }
                 }
@@ -1169,7 +1170,8 @@ private fun mainCardLabel(service: ServiceType): String = when (service) {
     ServiceType.KIMI,
     ServiceType.MIMO,
     ServiceType.MINIMAX,
-    ServiceType.ALIBABA -> stringResource(R.string.main_card_monthly_balance)
+    ServiceType.ALIBABA,
+    ServiceType.OPEN_DESIGN -> stringResource(R.string.main_card_monthly_balance)
 }
 
 private fun stateToChip(state: State): StatusStyle = when (state) {

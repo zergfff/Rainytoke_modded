@@ -161,6 +161,18 @@ fun CredentialEditScreen(
                                 onApiKeyChange = viewModel::updateTriggerApiKey,
                                 onSaveApiKey = { viewModel.saveTriggerApiKey() }
                             )
+                        } else if (service == ServiceType.OPEN_DESIGN) {
+                            OpenDesignForm(
+                                cookieValue = uiState.cookieInput,
+                                workspaceId = uiState.workspaceId,
+                                hasExisting = uiState.hasExisting,
+                                onCookieChange = viewModel::updateCookieInput,
+                                onWorkspaceIdChange = viewModel::updateWorkspaceId,
+                                onSave = { viewModel.saveOpenDesignSession() },
+                                onTestAndSave = { viewModel.testAndSaveOpenDesign() },
+                                onCopyLoginUrl = { copyToClipboard(context, uiState.loginUrl) },
+                                onOpenLoginUrl = { openInBrowser(context, uiState.loginUrl) }
+                            )
                         } else if (service == ServiceType.OPENCODE_GO) {
                             OpenCodeGoForm(
                                 authCookie = uiState.authCookie,
@@ -648,6 +660,72 @@ private fun CodexAuthJsonForm(
 }
 
 @Composable
+private fun OpenDesignForm(
+    cookieValue: String,
+    workspaceId: String,
+    hasExisting: Boolean,
+    onCookieChange: (String) -> Unit,
+    onWorkspaceIdChange: (String) -> Unit,
+    onSave: () -> Unit,
+    onTestAndSave: () -> Unit,
+    onCopyLoginUrl: () -> Unit,
+    onOpenLoginUrl: () -> Unit
+) {
+    Text(
+        text = stringResource(R.string.open_design_title),
+        style = MaterialTheme.typography.titleMedium
+    )
+    Text(
+        text = stringResource(R.string.open_design_hint),
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.outline
+    )
+
+    OutlinedTextField(
+        value = cookieValue,
+        onValueChange = onCookieChange,
+        label = { Text(stringResource(R.string.field_cookie_string)) },
+        placeholder = { Text("__Secure-better-auth.session_token=...") },
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 4.dp),
+        minLines = 4
+    )
+
+    OutlinedTextField(
+        value = workspaceId,
+        onValueChange = onWorkspaceIdChange,
+        label = { Text(stringResource(R.string.open_design_workspace)) },
+        singleLine = true,
+        modifier = Modifier.fillMaxWidth()
+    )
+    Text(
+        text = stringResource(R.string.open_design_workspace_hint),
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.outline
+    )
+
+    Button(onClick = onTestAndSave, modifier = Modifier.fillMaxWidth()) {
+        Text(text = stringResource(R.string.action_test_and_save))
+    }
+    OutlinedButton(onClick = onSave, modifier = Modifier.fillMaxWidth()) {
+        Text(text = stringResource(R.string.action_save_cookie))
+    }
+    if (hasExisting) {
+        Text(
+            text = stringResource(R.string.open_design_saved),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.primary
+        )
+    }
+    OutlinedButton(onClick = onOpenLoginUrl, modifier = Modifier.fillMaxWidth()) {
+        Text(text = stringResource(R.string.action_open_login_entry))
+    }
+    TextButton(onClick = onCopyLoginUrl, modifier = Modifier.fillMaxWidth()) {
+        Text(text = stringResource(R.string.action_copy_login_url))
+    }
+}
+
 private fun ManualCookieForm(
     cookieValue: String,
     onCookieChange: (String) -> Unit,

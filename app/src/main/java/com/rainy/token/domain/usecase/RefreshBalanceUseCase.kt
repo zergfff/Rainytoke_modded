@@ -11,6 +11,7 @@ import com.rainy.token.data.repository.CredentialRepository
 import com.rainy.token.data.repository.DeepSeekRepository
 import com.rainy.token.data.repository.OllamaRepository
 import com.rainy.token.data.repository.OpenCodeGoRepository
+import com.rainy.token.data.repository.OpenDesignRepository
 import com.rainy.token.data.repository.RefreshWriteSession
 import com.rainy.token.data.repository.RepositoryError
 import com.rainy.token.data.repository.retryOnTransientError
@@ -40,7 +41,8 @@ class RefreshBalanceUseCase @Inject constructor(
     private val kimiRepositoryProvider: Provider<KimiRepository>,
     private val mimoRepositoryProvider: Provider<MiMoRepository>,
     private val minimaxRepositoryProvider: Provider<MiniMaxRepository>,
-    private val alibabaRepositoryProvider: Provider<AlibabaRepository>
+    private val alibabaRepositoryProvider: Provider<AlibabaRepository>,
+    private val openDesignRepositoryProvider: Provider<OpenDesignRepository>
 ) {
     suspend operator fun invoke(service: ServiceType): Result<ServiceBalance> =
         withCredentialSession(service) {
@@ -74,6 +76,9 @@ class RefreshBalanceUseCase @Inject constructor(
                 }
                 ServiceType.ALIBABA -> retryOnTransientError {
                     alibabaRepositoryProvider.get().fetchBalance()
+                }
+                ServiceType.OPEN_DESIGN -> retryOnTransientError {
+                    openDesignRepositoryProvider.get().fetchBalance()
                 }
             }
         }

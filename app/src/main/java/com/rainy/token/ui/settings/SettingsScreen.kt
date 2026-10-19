@@ -390,7 +390,8 @@ private fun WidgetServicesCard(
         ServiceType.KIMI to ServiceType.KIMI.displayName,
         ServiceType.MIMO to ServiceType.MIMO.displayName,
         ServiceType.MINIMAX to ServiceType.MINIMAX.displayName,
-        ServiceType.ALIBABA to ServiceType.ALIBABA.displayName
+        ServiceType.ALIBABA to ServiceType.ALIBABA.displayName,
+        ServiceType.OPEN_DESIGN to ServiceType.OPEN_DESIGN.displayName
     )
     Card(
         modifier = Modifier.fillMaxWidth(),

@@ -367,6 +367,71 @@ class CredentialEditViewModel @Inject constructor(
         _uiState.update { it.copy(codexAuthJson = value) }
     }
 
+    // ─── Open Design Cloud ───
+
+    fun saveOpenDesignSession() {
+        val current = _uiState.value
+        if (current.cookieInput.isBlank()) {
+            _uiState.update { it.copy(message = UiText.Resource(R.string.error_cookie_empty)) }
+            return
+        }
+        val cookies = parseCookieString(current.cookieInput)
+        if (cookies.isEmpty()) {
+            _uiState.update { it.copy(message = UiText.Resource(R.string.error_cookie_format)) }
+            return
+        }
+        viewModelScope.launch {
+            doSaveOpenDesign(cookies, current.workspaceId.trim())
+            _uiState.update {
+                it.copy(
+                    message = UiText.Resource(R.string.msg_cookies_saved, listOf(cookies.size)),
+                    hasExisting = true,
+                    cookieCount = cookies.size
+                )
+            }
+        }
+    }
+
+    fun testAndSaveOpenDesign() {
+        val current = _uiState.value
+        if (current.cookieInput.isBlank()) {
+            _uiState.update { it.copy(message = UiText.Resource(R.string.error_cookie_empty)) }
+            return
+        }
+        val cookies = parseCookieString(current.cookieInput)
+        if (cookies.isEmpty()) {
+            _uiState.update { it.copy(message = UiText.Resource(R.string.error_cookie_format)) }
+            return
+        }
+        viewModelScope.launch {
+            val previous = credentialRepository.get(ServiceType.OPEN_DESIGN)
+            doSaveOpenDesign(cookies, current.workspaceId.trim())
+            testAndRollback(
+                type = ServiceType.OPEN_DESIGN,
+                saveAndPrep = { previous to { refreshBalanceUseCaseProvider.get().invoke(ServiceType.OPEN_DESIGN) } },
+                formatSuccess = { bal ->
+                    UiText.Resource(
+                        R.string.msg_connect_success_dollar,
+                        listOf(String.format(java.util.Locale.US, "%.2f", bal.amount))
+                    )
+                },
+                rollbackOnFailure = true
+            )
+        }
+    }
+
+    private suspend fun doSaveOpenDesign(cookies: List<CookieEntry>, workspaceId: String) {
+        val existing = credentialRepository.get(ServiceType.OPEN_DESIGN) as? Credential.SessionCredential
+        val updated = (existing ?: Credential.SessionCredential(
+            service = ServiceType.OPEN_DESIGN
+        )).copy(
+            cookies = cookies,
+            workspaceId = workspaceId.ifBlank { existing?.workspaceId },
+            lastVerifiedAt = System.currentTimeMillis()
+        )
+        credentialRepository.save(updated)
+    }
+
     fun saveCodexAuthJson() {
         val type = serviceType ?: return
         val current = _uiState.value

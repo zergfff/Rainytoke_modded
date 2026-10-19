@@ -34,7 +34,10 @@ enum class ServiceType(
     MINIMAX("MiniMax", "minimax"),
 
     /** 阿里云百炼 Coding Plan（API Key 模式，POST /data/api.json） */
-    ALIBABA("阿里云百炼", "alibaba");
+    ALIBABA("阿里云百炼", "alibaba"),
+
+    /** Open Design Cloud（浏览器会话 Cookie，GET /v1/workspaces/{id}/credits/me） */
+    OPEN_DESIGN("Open Design", "open_design");
 
     companion object {
         fun fromStorageKey(key: String): ServiceType? =

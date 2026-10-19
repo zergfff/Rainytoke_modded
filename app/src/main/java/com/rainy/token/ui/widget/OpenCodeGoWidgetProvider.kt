@@ -419,7 +419,8 @@ private fun populateServiceRows(
             ServiceType.KIMI,
             ServiceType.MIMO,
             ServiceType.MINIMAX,
-            ServiceType.ALIBABA -> {
+            ServiceType.ALIBABA,
+            ServiceType.OPEN_DESIGN -> {
                 fun calcPct(used: Double?, cap: Double?): Int? {
                     if (used == null || cap == null || cap <= 0) return null
                     return ((used / cap) * 100).toInt().coerceIn(0, 100)
@@ -613,7 +614,8 @@ private fun populateServiceRows(
             ServiceType.KIMI,
             ServiceType.MIMO,
             ServiceType.MINIMAX,
-            ServiceType.ALIBABA
+            ServiceType.ALIBABA,
+            ServiceType.OPEN_DESIGN
         )
 
         private fun autoRefreshPrefs(context: Context) =
@@ -684,6 +686,7 @@ private fun populateServiceRows(
             ServiceType.MIMO -> "MiMo"
             ServiceType.MINIMAX -> "MiniMax"
             ServiceType.ALIBABA -> "阿里云"
+            ServiceType.OPEN_DESIGN -> "OD"
         }
 
         private fun widgetLogo(service: ServiceType): Int = when (service) {
@@ -697,6 +700,7 @@ private fun populateServiceRows(
             ServiceType.MIMO -> R.drawable.ic_mimo_logo
             ServiceType.MINIMAX -> R.drawable.ic_minimax_logo
             ServiceType.ALIBABA -> R.drawable.ic_alibaba_logo
+            ServiceType.OPEN_DESIGN -> R.drawable.ic_open_design_logo
         }
 
         fun notifyDataChanged(context: Context) {
