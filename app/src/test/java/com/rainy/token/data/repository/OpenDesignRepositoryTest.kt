@@ -146,8 +146,8 @@ class OpenDesignRepositoryTest {
             """
             {
               "windows": [
-                { "policyId": "p5h", "durationSeconds": 18000, "remainingCredits": 8100, "limitCredits": 10000, "resetsAt": "2026-10-19T08:30:00.000Z" },
-                { "policyId": "p7d", "durationSeconds": 604800, "remainingCredits": 9100, "limitCredits": 10000, "resetsAt": "2026-10-24T06:00:00.000Z" }
+                { "policyId": "p5h", "durationSeconds": 18000, "remainingCredits": "8100", "limitCredits": "10000", "resetsAt": "2026-10-19T08:30:00.000Z" },
+                { "policyId": "p7d", "durationSeconds": 604800, "remainingCredits": "9100", "limitCredits": "10000", "resetsAt": "2026-10-24T06:00:00.000Z" }
               ]
             }
             """.trimIndent()

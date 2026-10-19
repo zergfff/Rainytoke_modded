@@ -110,21 +110,13 @@ class OpenDesignRepository @Inject constructor(
             }
         }
 
-        val body = getJson(
+        // 某些账号（例如 Go 个人订阅）在 /credits/me 上返回 403 workspace_forbidden，
+        // 因此它只作为附加信息，不能作为余额主来源。
+        val parsed = getJson(
             url = "$API_BASE/v1/workspaces/$workspaceId/credits/me",
             cookie = cookie,
             workspaceId = workspaceId
-        ).getOrElse { error ->
-            return@withContext Result.failure(error)
-        }
-
-        val parsed = parseCredits(body)
-            ?: return@withContext Result.failure(
-                RepositoryError.ParseError(
-                    RepositoryError.ParseErrorReason.NO_WINDOWS,
-                    "Open Design 响应中没有 totalBalance 字段"
-                )
-            )
+        ).getOrNull()?.let { parseCredits(it) }
 
         val summary = fetchBillingSummary(cookie, bearer = null)
         val planName = summary?.plan?.takeIf { it.isNotBlank() }?.let { planDisplayName(it) }
@@ -132,11 +124,19 @@ class OpenDesignRepository @Inject constructor(
         val windows = fetchCodingPlanWindows(cookie, workspaceId)
         val config = ServiceConfigProvider.get(ServiceType.OPEN_DESIGN)
 
-        val allocatedUsd = parsed.allocatedUsd
+        val allocatedUsd = parsed?.allocatedUsd
         val spentUsd = allocatedUsd
-            ?.takeIf { it >= parsed.balanceUsd }
-            ?.minus(parsed.balanceUsd)
-        val amountUsd = summary?.availableUsd ?: parsed.balanceUsd
+            ?.takeIf { it >= (parsed?.balanceUsd ?: 0.0) }
+            ?.minus(parsed?.balanceUsd ?: 0.0)
+        val amountUsd = summary?.availableUsd
+            ?: parsed?.balanceUsd
+            ?: fetchWalletBalance(cookie)
+            ?: return@withContext Result.failure(
+                RepositoryError.ParseError(
+                    RepositoryError.ParseErrorReason.NO_WINDOWS,
+                    "无法读取 Open Design 余额（billing summary / wallet / credits 均不可用）"
+                )
+            )
 
         val extras = buildMap {
             planName?.let {
@@ -147,18 +147,12 @@ class OpenDesignRepository @Inject constructor(
             allocatedUsd?.takeIf { it > 0 }?.let {
                 put("monthlyTotal", it.toString())
             }
-            parsed.rechargedUsd?.let { put("rechargedUsd", it.toString()) }
-            parsed.subscriptionUsd?.let { put("subscriptionUsd", it.toString()) }
-            parsed.lowBalanceState?.let { put("lowBalanceState", it) }
+            parsed?.rechargedUsd?.let { put("rechargedUsd", it.toString()) }
+            parsed?.subscriptionUsd?.let { put("subscriptionUsd", it.toString()) }
+            parsed?.lowBalanceState?.let { put("lowBalanceState", it) }
             put("workspaceId", workspaceId)
             summary?.status?.let { put("subscriptionStatus", it) }
-            parsed.periodEndAt?.let { iso ->
-                put("billingPeriodEnd", iso)
-                parseIsoMillis(iso)?.let { end ->
-                    val resetInSec = ((end - System.currentTimeMillis()) / 1000).coerceAtLeast(0)
-                    put("monthly.resetInSec", resetInSec.toString())
-                }
-            }
+            summary?.interval?.let { put("billingInterval", it) }
             windows.forEach { window ->
                 val prefix = window.extraPrefix() ?: return@forEach
                 put("$prefix.used", window.usedPercent().toString())
@@ -174,7 +168,7 @@ class OpenDesignRepository @Inject constructor(
             isAvailable = summary?.status?.equals("active", true) ?: true,
             monthlySpent = summary?.consumedUsd ?: spentUsd,
             totalQuota = allocatedUsd,
-            nextResetAt = summary?.periodEndMillis ?: parsed.periodEndAt?.let { parseIsoMillis(it) },
+            nextResetAt = summary?.periodEndMillis,
             extras = extras
         )
 
@@ -297,8 +291,10 @@ class OpenDesignRepository @Inject constructor(
                 is JSONObject -> {
                     root.optString("activeWorkspaceId").takeIf { it.isNotBlank() }
                         ?: extractWorkspaceId(root.optJSONArray("workspaces"))
+                        ?: extractWorkspaceId(root.optJSONArray("items"))
                         ?: root.optJSONObject("workspace")?.optString("workspaceId")
                             ?.takeIf { it.isNotBlank() }
+                        ?: extractWorkspaceId(root.optJSONObject("data")?.optJSONArray("items"))
                 }
                 else -> null
             }
@@ -338,6 +334,14 @@ class OpenDesignRepository @Inject constructor(
             cookie = cookie,
             workspaceId = workspaceId
         ).getOrNull()?.let { parseCodingPlanUsage(it) }.orEmpty()
+
+    /** 钱包余额（Cookie 或 Control Key 均可）。 */
+    private fun fetchWalletBalance(cookie: String): Double? =
+        getJson(
+            url = "$API_BASE/v1/wallet/balance",
+            cookie = cookie,
+            workspaceId = null
+        ).getOrNull()?.let { parseWalletBalance(it) }
 
     /** 余额接口不带套餐信息，额外查一次 dashboard（失败不影响余额）。 */
     private fun fetchPlanName(cookie: String, workspaceId: String): String? = runCatching {
