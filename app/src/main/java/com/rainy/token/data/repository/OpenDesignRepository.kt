@@ -73,11 +73,16 @@ class OpenDesignRepository @Inject constructor(
             )
         }
 
-        // 官方桌面客户端走的是 control key（~/.amr/config.json → profiles.<profile>.controlKey），
-        // 比浏览器会话 Cookie 稳定得多，且不受第三方 Cookie / 登录过期影响。
-        // 有 control key 时优先用它；失败再退回 Cookie。
         val controlKey = credential.token?.trim().orEmpty()
         val cookie = buildCookieHeader(credential)
+
+        // Cookie 优先：5h/7d 窗口只认会话 Cookie，Control Key 只能读套餐和余额。
+        if (cookie.isNotBlank()) {
+            val viaCookie = fetchWithCookie(credential, cookie)
+            if (viaCookie.isSuccess) return@withContext viaCookie
+            if (controlKey.isBlank()) return@withContext viaCookie
+            DebugLog.e(TAG, "Cookie 失败，回退 Control Key: ${viaCookie.exceptionOrNull()?.message}")
+        }
 
         if (controlKey.isNotBlank()) {
             val viaControlKey = fetchWithControlKey(controlKey, cookie)
@@ -89,29 +94,29 @@ class OpenDesignRepository @Inject constructor(
                 )
                 return@withContext Result.success(balance)
             }
-            if (cookie.isBlank()) {
-                return@withContext viaControlKey
-            }
-            DebugLog.e(TAG, "control key 失败，回退 Cookie: ${viaControlKey.exceptionOrNull()?.message}")
+            return@withContext viaControlKey
         }
 
-        if (cookie.isBlank()) {
-            return@withContext Result.failure(
-                RepositoryError.InvalidCredential(
-                    "缺少凭据。推荐填 Control Key（桌面客户端 ~/.amr/config.json 里的 controlKey）；" +
-                        "也可以粘贴 open-design.ai / amr-api.open-design.ai 的登录 Cookie"
-                )
+        Result.failure(
+            RepositoryError.InvalidCredential(
+                "缺少凭据。推荐填 Control Key（桌面客户端 ~/.amr/config.json 里的 controlKey）；" +
+                    "也可以粘贴 open-design.ai / amr-api.open-design.ai 的登录 Cookie"
             )
-        }
+        )
+    }
 
+    /**
+     * Cookie 链路：billing summary 提供套餐/余额，coding-plan-usage 提供 5h/7d 窗口。
+     * `/credits/me` 对部分 Go 账号返回 403，只作为可选附加信息。
+     */
+    private suspend fun fetchWithCookie(
+        credential: Credential.SessionCredential,
+        cookie: String
+    ): Result<ServiceBalance> {
         val workspaceId = credential.workspaceId?.trim().orEmpty().ifBlank {
-            discoverWorkspaceId(cookie).getOrElse { error ->
-                return@withContext Result.failure(error)
-            }
+            discoverWorkspaceId(cookie).getOrElse { return Result.failure(it) }
         }
 
-        // 某些账号（例如 Go 个人订阅）在 /credits/me 上返回 403 workspace_forbidden，
-        // 因此它只作为附加信息，不能作为余额主来源。
         val parsed = getJson(
             url = "$API_BASE/v1/workspaces/$workspaceId/credits/me",
             cookie = cookie,
@@ -131,7 +136,7 @@ class OpenDesignRepository @Inject constructor(
         val amountUsd = summary?.availableUsd
             ?: parsed?.balanceUsd
             ?: fetchWalletBalance(cookie)
-            ?: return@withContext Result.failure(
+            ?: return Result.failure(
                 RepositoryError.ParseError(
                     RepositoryError.ParseErrorReason.NO_WINDOWS,
                     "无法读取 Open Design 余额（billing summary / wallet / credits 均不可用）"
@@ -179,7 +184,7 @@ class OpenDesignRepository @Inject constructor(
                 lastVerifiedAt = System.currentTimeMillis()
             )
         )
-        Result.success(balance)
+        return Result.success(balance)
     }
 
     /** 用桌面客户端的 control key 调官方计费接口（与客户端同款鉴权）。 */
