@@ -91,6 +91,9 @@ internal fun BalanceMainArea(card: DashboardCardUi) {
             Spacer(modifier = Modifier.height(12.dp))
             OllamaUsageWindows(balance)
         }
+        card.service == ServiceType.OPEN_DESIGN -> {
+            OpenDesignMainBalance(balance)
+        }
         else -> {
             Row(verticalAlignment = Alignment.Bottom) {
                 Text(
@@ -122,6 +125,77 @@ internal fun BalanceMainArea(card: DashboardCardUi) {
                 )
             }
         }
+    }
+}
+
+@Composable
+internal fun OpenDesignMainBalance(balance: ServiceBalance) {
+    val fiveHourUsed = balance.extras["fiveHour.used"]?.toDoubleOrNull()
+    val weeklyUsed = balance.extras["weekly.used"]?.toDoubleOrNull()
+
+    if (weeklyUsed != null) {
+        val weeklyRemaining = (100.0 - weeklyUsed).coerceIn(0.0, 100.0)
+        Row(verticalAlignment = Alignment.Bottom) {
+            Text(
+                text = formatAmount(weeklyRemaining),
+                style = MaterialTheme.typography.displayMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Spacer(modifier = Modifier.width(4.dp))
+            Text(
+                text = "%",
+                style = MaterialTheme.typography.titleMedium,
+                color = inkMuted(),
+                modifier = Modifier.padding(bottom = 6.dp)
+            )
+        }
+        Text(
+            text = stringResource(R.string.open_design_weekly_remaining),
+            style = MaterialTheme.typography.bodySmall,
+            color = inkMuted()
+        )
+        fiveHourUsed?.let {
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = stringResource(
+                    R.string.open_design_five_hour_remaining,
+                    formatAmount((100.0 - it).coerceIn(0.0, 100.0))
+                ),
+                style = MaterialTheme.typography.bodySmall,
+                color = inkMuted()
+            )
+        }
+        Text(
+            text = stringResource(
+                R.string.open_design_wallet_balance,
+                balance.unit,
+                formatAmount(balance.amount)
+            ),
+            style = MaterialTheme.typography.bodySmall,
+            color = inkMuted()
+        )
+    } else {
+        Row(verticalAlignment = Alignment.Bottom) {
+            Text(
+                text = formatAmount(balance.amount),
+                style = MaterialTheme.typography.displayMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Spacer(modifier = Modifier.width(4.dp))
+            Text(
+                text = balance.unit,
+                style = MaterialTheme.typography.titleMedium,
+                color = inkMuted(),
+                modifier = Modifier.padding(bottom = 6.dp)
+            )
+        }
+        Text(
+            text = stringResource(R.string.open_design_no_window_data),
+            style = MaterialTheme.typography.bodySmall,
+            color = inkMuted()
+        )
     }
 }
 

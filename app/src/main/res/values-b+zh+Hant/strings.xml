@@ -606,4 +606,8 @@
     <string name="open_design_workspace">Workspace ID（可留空自動辨識）</string>
     <string name="open_design_workspace_hint">控制台網址 ?workspaceId= 後面的值，例如 rfxc8j91vq31t3mvxzvir2l0。留空時 APP 會自動讀取目前工作區。</string>
     <string name="open_design_saved">已儲存 Open Design 憑證</string>
+    <string name="open_design_weekly_remaining">7 天額度剩餘</string>
+    <string name="open_design_five_hour_remaining">5 小時額度剩餘 %1$s%%</string>
+    <string name="open_design_wallet_balance">錢包餘額 %1$s%2$s</string>
+    <string name="open_design_no_window_data">僅控制金鑰模式：5 小時 / 7 天視窗需要 Cookie</string>
 </resources>

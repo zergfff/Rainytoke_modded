@@ -613,4 +613,8 @@
     <string name="open_design_workspace">Workspace ID (optional)</string>
     <string name="open_design_workspace_hint">The value after ?workspaceId= in the console URL, e.g. rfxc8j91vq31t3mvxzvir2l0. Leave blank to detect the current workspace automatically.</string>
     <string name="open_design_saved">Open Design credentials saved</string>
+    <string name="open_design_weekly_remaining">7-day quota remaining</string>
+    <string name="open_design_five_hour_remaining">5-hour quota remaining %1$s%%</string>
+    <string name="open_design_wallet_balance">Wallet %1$s%2$s</string>
+    <string name="open_design_no_window_data">Control Key only: 5h/7d windows require a cookie</string>
 </resources>
