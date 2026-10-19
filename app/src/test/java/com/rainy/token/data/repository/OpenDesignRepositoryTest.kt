@@ -79,4 +79,37 @@ class OpenDesignRepositoryTest {
         assertEquals(0.0, parsed.allocatedUsd!!, 1e-9)
         assertEquals("empty", parsed.lowBalanceState)
     }
+
+    @Test
+    fun `parses control key me response`() {
+        val account = parseControlKeyMe(
+            """{"id":"u_1","email":"a@b.c","plan":"go","balanceUsd":"12.34"}"""
+        )
+
+        assertNotNull(account)
+        assertEquals(12.34, account!!.balanceUsd!!, 1e-9)
+        assertEquals("go", account.plan)
+        assertEquals("a@b.c", account.email)
+    }
+
+    @Test
+    fun `parses nested me response and allows missing balance`() {
+        val account = parseControlKeyMe(
+            """{"user":{"id":"u_1","email":"a@b.c","plan":"pro","balanceUsd":null}}"""
+        )
+
+        assertNotNull(account)
+        assertNull(account!!.balanceUsd)
+        assertEquals("pro", account.plan)
+    }
+
+    @Test
+    fun `parses wallet balance response`() {
+        assertEquals(
+            7.5,
+            parseWalletBalance("""{"balanceUsd":"7.50","updatedAt":"2026-10-19T00:00:00Z"}""")!!,
+            1e-9
+        )
+        assertNull(parseWalletBalance("""{"updatedAt":"2026-10-19T00:00:00Z"}"""))
+    }
 }

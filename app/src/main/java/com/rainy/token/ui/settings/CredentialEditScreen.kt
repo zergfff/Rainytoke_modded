@@ -165,9 +165,11 @@ fun CredentialEditScreen(
                             OpenDesignForm(
                                 cookieValue = uiState.cookieInput,
                                 workspaceId = uiState.workspaceId,
+                                controlKey = uiState.apiKey,
                                 hasExisting = uiState.hasExisting,
                                 onCookieChange = viewModel::updateCookieInput,
                                 onWorkspaceIdChange = viewModel::updateWorkspaceId,
+                                onControlKeyChange = viewModel::updateApiKey,
                                 onSave = { viewModel.saveOpenDesignSession() },
                                 onTestAndSave = { viewModel.testAndSaveOpenDesign() },
                                 onCopyLoginUrl = { copyToClipboard(context, uiState.loginUrl) },
@@ -663,9 +665,11 @@ private fun CodexAuthJsonForm(
 private fun OpenDesignForm(
     cookieValue: String,
     workspaceId: String,
+    controlKey: String,
     hasExisting: Boolean,
     onCookieChange: (String) -> Unit,
     onWorkspaceIdChange: (String) -> Unit,
+    onControlKeyChange: (String) -> Unit,
     onSave: () -> Unit,
     onTestAndSave: () -> Unit,
     onCopyLoginUrl: () -> Unit,
@@ -679,6 +683,31 @@ private fun OpenDesignForm(
         text = stringResource(R.string.open_design_hint),
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.outline
+    )
+
+    OutlinedTextField(
+        value = controlKey,
+        onValueChange = onControlKeyChange,
+        label = { Text(stringResource(R.string.open_design_control_key)) },
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 4.dp),
+        minLines = 2
+    )
+    Text(
+        text = stringResource(R.string.open_design_control_key_hint),
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.outline
+    )
+
+    Text(
+        text = stringResource(R.string.or_manual_import),
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.outline,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 4.dp),
+        textAlign = androidx.compose.ui.text.style.TextAlign.Center
     )
 
     OutlinedTextField(

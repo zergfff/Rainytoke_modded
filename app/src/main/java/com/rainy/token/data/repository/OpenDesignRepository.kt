@@ -71,12 +71,33 @@ class OpenDesignRepository @Inject constructor(
             )
         }
 
+        // 官方桌面客户端走的是 control key（~/.amr/config.json → profiles.<profile>.controlKey），
+        // 比浏览器会话 Cookie 稳定得多，且不受第三方 Cookie / 登录过期影响。
+        // 有 control key 时优先用它；失败再退回 Cookie。
+        val controlKey = credential.token?.trim().orEmpty()
         val cookie = buildCookieHeader(credential)
+
+        if (controlKey.isNotBlank()) {
+            val viaControlKey = fetchWithControlKey(controlKey, cookie)
+            if (viaControlKey.isSuccess) {
+                val balance = viaControlKey.getOrThrow()
+                balanceCache.put(ServiceType.OPEN_DESIGN, balance)
+                credentialRepository.save(
+                    credential.copy(lastVerifiedAt = System.currentTimeMillis())
+                )
+                return@withContext Result.success(balance)
+            }
+            if (cookie.isBlank()) {
+                return@withContext viaControlKey
+            }
+            DebugLog.e(TAG, "control key 失败，回退 Cookie: ${viaControlKey.exceptionOrNull()?.message}")
+        }
+
         if (cookie.isBlank()) {
             return@withContext Result.failure(
                 RepositoryError.InvalidCredential(
-                    "缺少登录 Cookie。请先在浏览器登录 open-design.ai，再把 " +
-                        "open-design.ai / amr-api.open-design.ai 的 Cookie 粘贴到设置页"
+                    "缺少凭据。推荐填 Control Key（桌面客户端 ~/.amr/config.json 里的 controlKey）；" +
+                        "也可以粘贴 open-design.ai / amr-api.open-design.ai 的登录 Cookie"
                 )
             )
         }
@@ -154,6 +175,69 @@ class OpenDesignRepository @Inject constructor(
         Result.success(balance)
     }
 
+    /** 用桌面客户端的 control key 调 `/v1/me`（官方客户端同款鉴权），失败再由上层退回 Cookie。 */
+    private fun fetchWithControlKey(
+        controlKey: String,
+        cookie: String
+    ): Result<ServiceBalance> {
+        val body = getJson(
+            url = "$API_BASE/v1/me",
+            cookie = cookie,
+            workspaceId = null,
+            bearer = controlKey
+        ).getOrElse { return Result.failure(it) }
+
+        val account = parseControlKeyMe(body)
+            ?: return Result.failure(
+                RepositoryError.ParseError(
+                    RepositoryError.ParseErrorReason.MALFORMED_RESPONSE,
+                    "Open Design /v1/me 响应缺少余额字段"
+                )
+            )
+
+        // 部分账号 /v1/me 不带 balanceUsd，改问钱包余额接口。
+        val balanceUsd = account.balanceUsd ?: run {
+            val walletBody = getJson(
+                url = "$API_BASE/v1/wallet/balance",
+                cookie = cookie,
+                workspaceId = null,
+                bearer = controlKey
+            ).getOrNull() ?: return Result.failure(
+                RepositoryError.ParseError(
+                    RepositoryError.ParseErrorReason.NO_WINDOWS,
+                    "无法读取 Open Design 钱包余额"
+                )
+            )
+            parseWalletBalance(walletBody) ?: return Result.failure(
+                RepositoryError.ParseError(
+                    RepositoryError.ParseErrorReason.MALFORMED_RESPONSE,
+                    "Open Design /v1/wallet/balance 响应缺少 balanceUsd"
+                )
+            )
+        }
+
+        val plan = account.plan?.takeIf { it.isNotBlank() }?.let { planDisplayName(it) }
+        val extras = buildMap {
+            plan?.let {
+                put("plan", it)
+                put("planName", it)
+            }
+            put("monthlyRemaining", balanceUsd.toString())
+            put("authMode", "control_key")
+            account.email?.takeIf { it.isNotBlank() }?.let { put("account", it) }
+        }
+
+        return Result.success(
+            ServiceBalance(
+                service = ServiceType.OPEN_DESIGN,
+                amount = balanceUsd,
+                unit = ServiceConfigProvider.get(ServiceType.OPEN_DESIGN).displayUnit,
+                isAvailable = true,
+                extras = extras
+            )
+        )
+    }
+
     /** 调 `/v1/workspaces` 取当前工作区 id。 */
     private fun discoverWorkspaceId(cookie: String): Result<String> {
         val body = getJson("$API_BASE/v1/workspaces", cookie, workspaceId = null)
@@ -214,15 +298,23 @@ class OpenDesignRepository @Inject constructor(
         else -> raw
     }
 
-    private fun getJson(url: String, cookie: String, workspaceId: String?): Result<String> {
+    private fun getJson(
+        url: String,
+        cookie: String?,
+        workspaceId: String?,
+        bearer: String? = null
+    ): Result<String> {
         val request = Request.Builder()
             .url(url)
             .header("User-Agent", DESKTOP_UA)
             .header("Accept", "application/json")
             .header("Origin", WEB_ORIGIN)
             .header("Referer", "$WEB_ORIGIN/cloud/dashboard")
-            .header("Cookie", cookie)
-            .apply { workspaceId?.takeIf { it.isNotBlank() }?.let { header("x-vela-workspace-id", it) } }
+            .apply {
+                cookie?.takeIf { it.isNotBlank() }?.let { header("Cookie", it) }
+                bearer?.takeIf { it.isNotBlank() }?.let { header("Authorization", "Bearer $it") }
+                workspaceId?.takeIf { it.isNotBlank() }?.let { header("x-vela-workspace-id", it) }
+            }
             .get()
             .build()
 
@@ -234,7 +326,11 @@ class OpenDesignRepository @Inject constructor(
                     response.code == 401 || response.code == 403 ->
                         Result.failure(
                             RepositoryError.InvalidCredential(
-                                "Open Design 登录已过期 (HTTP ${response.code})，请重新登录后粘贴新的 Cookie"
+                                if (bearer != null) {
+                                    "Open Design Control Key 无效或已过期 (HTTP ${response.code})"
+                                } else {
+                                    "Open Design 登录已过期 (HTTP ${response.code})，请重新登录后粘贴新的 Cookie"
+                                }
                             )
                         )
                     response.code == 429 -> Result.failure(
@@ -326,5 +422,41 @@ internal fun parseCredits(body: String): OpenDesignRepository.ParsedCredit? = ru
         periodEndAt = text("periodEndAt")?.takeIf { it.isNotBlank() }
     )
 }.getOrNull()
+
+/** `/v1/me`（control key 鉴权）里我们关心的账号字段。 */
+internal data class ParsedAccount(
+    val balanceUsd: Double?,
+    val plan: String?,
+    val email: String?
+)
+
+/**
+ * 解析 `GET /api/v1/me`（`Authorization: Bearer <controlKey>`）。
+ *
+ * 官方桌面客户端把它当 live account：`user.plan` + `user.balanceUsd`（USD 字符串）。
+ * 兼容 `{user:{...}}` / `{data:{...}}` / 扁平三种包装。
+ */
+internal fun parseControlKeyMe(body: String): ParsedAccount? = runCatching {
+    if (body.isBlank()) return@runCatching null
+    val root = openDesignJson.parseToJsonElement(body).jsonObject
+    val user = (root["user"] as? JsonObject)
+        ?: (root["data"] as? JsonObject)
+        ?: (root["account"] as? JsonObject)
+        ?: root
+    val balance = (user["balanceUsd"] as? JsonPrimitive)?.doubleOrNull
+    val plan = (user["plan"] as? JsonPrimitive)?.contentOrNull
+    val email = (user["email"] as? JsonPrimitive)?.contentOrNull
+    if (balance == null && plan == null && email == null) return@runCatching null
+    ParsedAccount(balanceUsd = balance, plan = plan, email = email)
+}.getOrNull()
+
+/** 解析 `GET /api/v1/wallet/balance` → `{"balanceUsd":"12.34","updatedAt":"..."}`。 */
+internal fun parseWalletBalance(body: String): Double? = runCatching {
+    if (body.isBlank()) return@runCatching null
+    val root = openDesignJson.parseToJsonElement(body).jsonObject
+    val wallet = (root["wallet"] as? JsonObject) ?: (root["data"] as? JsonObject) ?: root
+    (wallet["balanceUsd"] as? JsonPrimitive)?.doubleOrNull
+}.getOrNull()
+
 
 

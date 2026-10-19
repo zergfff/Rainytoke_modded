@@ -605,9 +605,11 @@
     <string name="service_desc_mimo">Cookie fetch · Token plan</string>
     <string name="service_desc_minimax">JSON API · Coding plan</string>
     <string name="service_desc_alibaba">RPC · Coding plan quota</string>
-    <string name="service_desc_open_design">Cookie fetch · Cloud credits</string>
+    <string name="service_desc_open_design">Control Key · Cloud credits</string>
     <string name="open_design_title">Open Design Cloud credentials</string>
-    <string name="open_design_hint">Sign in to open-design.ai in your browser, then copy the cookies for open-design.ai and amr-api.open-design.ai from DevTools → Application → Cookies (include the better-auth session cookie).</string>
+    <string name="open_design_hint">Recommended: paste the desktop client / CLI Control Key (~/.amr/config.json → profiles.&lt;profile&gt;.controlKey); it does not expire like a browser session. Without the client, paste cookies instead.</string>
+    <string name="open_design_control_key">Control Key (recommended)</string>
+    <string name="open_design_control_key_hint">The controlKey from ~/.amr/config.json. The app uses it against /api/v1/me and needs no cookies.</string>
     <string name="open_design_workspace">Workspace ID (optional)</string>
     <string name="open_design_workspace_hint">The value after ?workspaceId= in the console URL, e.g. rfxc8j91vq31t3mvxzvir2l0. Leave blank to detect the current workspace automatically.</string>
     <string name="open_design_saved">Open Design credentials saved</string>

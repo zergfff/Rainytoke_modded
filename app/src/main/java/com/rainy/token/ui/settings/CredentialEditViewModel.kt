@@ -371,20 +371,24 @@ class CredentialEditViewModel @Inject constructor(
 
     fun saveOpenDesignSession() {
         val current = _uiState.value
-        if (current.cookieInput.isBlank()) {
+        val cookies = if (current.cookieInput.isBlank()) {
+            emptyList()
+        } else {
+            parseCookieString(current.cookieInput)
+        }
+        if (current.apiKey.isBlank() && cookies.isEmpty()) {
             _uiState.update { it.copy(message = UiText.Resource(R.string.error_cookie_empty)) }
             return
         }
-        val cookies = parseCookieString(current.cookieInput)
-        if (cookies.isEmpty()) {
+        if (current.cookieInput.isNotBlank() && cookies.isEmpty()) {
             _uiState.update { it.copy(message = UiText.Resource(R.string.error_cookie_format)) }
             return
         }
         viewModelScope.launch {
-            doSaveOpenDesign(cookies, current.workspaceId.trim())
+            doSaveOpenDesign(cookies, current.workspaceId.trim(), current.apiKey.trim())
             _uiState.update {
                 it.copy(
-                    message = UiText.Resource(R.string.msg_cookies_saved, listOf(cookies.size)),
+                    message = UiText.Resource(R.string.open_design_saved),
                     hasExisting = true,
                     cookieCount = cookies.size
                 )
@@ -394,18 +398,22 @@ class CredentialEditViewModel @Inject constructor(
 
     fun testAndSaveOpenDesign() {
         val current = _uiState.value
-        if (current.cookieInput.isBlank()) {
+        val cookies = if (current.cookieInput.isBlank()) {
+            emptyList()
+        } else {
+            parseCookieString(current.cookieInput)
+        }
+        if (current.apiKey.isBlank() && cookies.isEmpty()) {
             _uiState.update { it.copy(message = UiText.Resource(R.string.error_cookie_empty)) }
             return
         }
-        val cookies = parseCookieString(current.cookieInput)
-        if (cookies.isEmpty()) {
+        if (current.cookieInput.isNotBlank() && cookies.isEmpty()) {
             _uiState.update { it.copy(message = UiText.Resource(R.string.error_cookie_format)) }
             return
         }
         viewModelScope.launch {
             val previous = credentialRepository.get(ServiceType.OPEN_DESIGN)
-            doSaveOpenDesign(cookies, current.workspaceId.trim())
+            doSaveOpenDesign(cookies, current.workspaceId.trim(), current.apiKey.trim())
             testAndRollback(
                 type = ServiceType.OPEN_DESIGN,
                 saveAndPrep = { previous to { refreshBalanceUseCaseProvider.get().invoke(ServiceType.OPEN_DESIGN) } },
@@ -420,13 +428,18 @@ class CredentialEditViewModel @Inject constructor(
         }
     }
 
-    private suspend fun doSaveOpenDesign(cookies: List<CookieEntry>, workspaceId: String) {
+    private suspend fun doSaveOpenDesign(
+        cookies: List<CookieEntry>,
+        workspaceId: String,
+        controlKey: String
+    ) {
         val existing = credentialRepository.get(ServiceType.OPEN_DESIGN) as? Credential.SessionCredential
         val updated = (existing ?: Credential.SessionCredential(
             service = ServiceType.OPEN_DESIGN
         )).copy(
-            cookies = cookies,
+            cookies = if (cookies.isNotEmpty()) cookies else existing?.cookies.orEmpty(),
             workspaceId = workspaceId.ifBlank { existing?.workspaceId },
+            token = controlKey.ifBlank { existing?.token },
             lastVerifiedAt = System.currentTimeMillis()
         )
         credentialRepository.save(updated)
