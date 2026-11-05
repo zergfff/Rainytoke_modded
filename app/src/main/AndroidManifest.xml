@@ -97,7 +97,7 @@
         <!-- MIUI Widget 版本号（application 级，升级时递增） -->
         <meta-data
             android:name="miuiWidgetVersion"
-            android:value="1" />
+            android:value="2" />
 
     </application>
 

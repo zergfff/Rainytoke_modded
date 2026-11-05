@@ -250,13 +250,43 @@ fun SettingsScreen(
                 item {
                     LanguageCard(onClick = { showLanguageDialog = true })
                 }
-                // 调试日志与"关于"卡片已移除（日志页无实际输出，关于页含无关条款）
+                // 调试日志：小组件/天气的文件日志都在这里看，出问题一键复制
+                item {
+                    DebugLogCard(onClick = onOpenDebugLog)
+                }
             }
         }
     }
 
     if (showLanguageDialog) {
         LanguageDialog(onDismiss = { showLanguageDialog = false })
+    }
+}
+
+// ─── 调试日志入口卡片 ───
+@Composable
+private fun DebugLogCard(onClick: () -> Unit) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() },
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(
+                text = stringResource(R.string.title_debug_log),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = stringResource(R.string.debug_log_desc),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
     }
 }
 

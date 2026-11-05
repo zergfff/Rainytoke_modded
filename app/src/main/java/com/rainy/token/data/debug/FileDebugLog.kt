@@ -145,6 +145,9 @@ object FileDebugLog {
                     current.renameTo(backup)
                 }
                 File(dir, FILE_NAME).appendText(line + "\n", Charsets.UTF_8)
+                // 同时落到 logcat：`adb logcat -s FileDebugLog` 就能看，
+                // 不用等用户进 APP 复制文件
+                android.util.Log.d("FileDebugLog", line.take(500))
             } catch (_: Throwable) {
                 // 日志失败绝不能影响小组件本身
             }
