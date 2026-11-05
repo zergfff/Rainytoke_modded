@@ -6,6 +6,8 @@
     <color name="widget_primary_text">#FFD1DC</color>
     <color name="widget_secondary_text">#8A7A82</color>
     <color name="widget_updated_text">#C4A0AB</color>
+    <!-- 进度条底槽（自绘进度条的未填充部分）：中性半透明灰，深浅背景都可见 -->
+    <color name="widget_bar_track">#4D8A7A82</color>
     <!-- 进度条颜色（深色背景下同样鲜艳可见） -->
     <color name="widget_bar_5h">#FF85A2</color>
     <color name="widget_bar_weekly">#FFA726</color>

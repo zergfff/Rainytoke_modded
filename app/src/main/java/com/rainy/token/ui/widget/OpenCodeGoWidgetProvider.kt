@@ -13,6 +13,7 @@ import com.rainy.token.MainActivity
 import com.rainy.token.R
 import com.rainy.token.data.cache.BalanceCache
 import com.rainy.token.data.cache.balanceCacheDataStore
+import com.rainy.token.data.debug.FileDebugLog
 import com.rainy.token.domain.service.ServiceType
 import com.rainy.token.ui.components.normalizeWindowLabel
 import com.rainy.token.ui.theme.ThemePresets
@@ -42,6 +43,9 @@ import kotlin.math.roundToInt
 class OpenCodeGoWidgetProvider : AppWidgetProvider() {
 
     override fun onReceive(context: Context, intent: Intent) {
+        // 小组件调试日志：先记宿主发来的广播，再看后面走的哪条分支
+        FileDebugLog.logEnvOnce(context)
+        FileDebugLog.i(context, "RECEIVE", "action" to (intent.action ?: "-"))
         when (intent.action) {
             ACTION_SWITCH_SERVICE -> {
                 switchDisplayService(context)
@@ -81,6 +85,11 @@ class OpenCodeGoWidgetProvider : AppWidgetProvider() {
         clockOnly: Boolean = false
     ) {
         var selectedHasCachedData = false
+        FileDebugLog.i(
+            context, "UPDATE",
+            "ids" to appWidgetIds.joinToString(","),
+            "clockOnly" to clockOnly
+        )
         val localized = LocaleManager.wrapContext(context)
 
         // 读取主题色
@@ -186,7 +195,25 @@ class OpenCodeGoWidgetProvider : AppWidgetProvider() {
                 }
             }
 
-            appWidgetManager.updateAppWidget(widgetId, views)
+            // 宿主尺寸 + 提交结果：出问题时把这段日志和截图对照，
+            // 就能区分「我们没赋值」和「宿主不认这条赋值」
+            val opts = appWidgetManager.getAppWidgetOptions(widgetId)
+            FileDebugLog.i(
+                context, "UPDATE_ONE",
+                "widget" to widgetId,
+                "size" to buildString {
+                    append(opts.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH))
+                    append('x').append(opts.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT))
+                    append('~').append(opts.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_WIDTH))
+                    append('x').append(opts.getInt(AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT))
+                },
+                "scale" to fontScale
+            )
+            try {
+                appWidgetManager.updateAppWidget(widgetId, views)
+            } catch (t: Throwable) {
+                FileDebugLog.e(context, "UPDATE_FAIL", t, "widget" to widgetId)
+            }
         }
 
         // 自动刷新（非 clock-only 模式）
@@ -386,6 +413,11 @@ private fun populateServiceRows(
         }
         views.setViewVisibility(R.id.widget_ds_row, android.view.View.GONE)
         val extras = balance.extras
+        FileDebugLog.i(
+            context, "POPULATE",
+            "svc" to service.name,
+            "extras" to extras.keys.sorted().joinToString(",").take(400)
+        )
 
         // 标题无条件设置：showRefreshing() 会把标题临时改成"刷新中…"，
         // 若只在个别分支里重设，其他服务刷新结束后标题就永久残留"刷新中…"。
@@ -402,13 +434,13 @@ private fun populateServiceRows(
         when (service) {
             ServiceType.OPENCODE_GO -> {
                 setRowLabel(views, context.getString(R.string.window_5h_short), context.getString(R.string.window_weekly), context.getString(R.string.window_monthly))
-                populateRow(views, R.id.row1_pct, R.id.row1_bar, R.id.row1_reset,
+                populateRow(context, views, R.id.row1_pct, R.id.row1_bar_fill, R.id.row1_reset,
                     pct = extras["rolling.pct"]?.toFloatOrNull()?.roundToInt(),
                     resetSec = extras["rolling.resetInSec"]?.toLongOrNull())
-                populateRow(views, R.id.row2_pct, R.id.row2_bar, R.id.row2_reset,
+                populateRow(context, views, R.id.row2_pct, R.id.row2_bar_fill, R.id.row2_reset,
                     pct = extras["weekly.pct"]?.toFloatOrNull()?.roundToInt(),
                     resetSec = extras["weekly.resetInSec"]?.toLongOrNull())
-                populateRow(views, R.id.row3_pct, R.id.row3_bar, R.id.row3_reset,
+                populateRow(context, views, R.id.row3_pct, R.id.row3_bar_fill, R.id.row3_reset,
                     pct = extras["monthly.pct"]?.toFloatOrNull()?.roundToInt(),
                     resetSec = extras["monthly.resetInSec"]?.toLongOrNull())
             }
@@ -426,13 +458,13 @@ private fun populateServiceRows(
                     return ((used / cap) * 100).toInt().coerceIn(0, 100)
                 }
                 setRowLabel(views, context.getString(R.string.window_5h_short), context.getString(R.string.window_weekly), context.getString(R.string.window_monthly))
-                populateRow(views, R.id.row1_pct, R.id.row1_bar, R.id.row1_reset,
+                populateRow(context, views, R.id.row1_pct, R.id.row1_bar_fill, R.id.row1_reset,
                     pct = calcPct(extras["fiveHour.used"]?.toDoubleOrNull(), extras["fiveHour.cap"]?.toDoubleOrNull()),
                     resetSec = extras["fiveHour.resetInSec"]?.toLongOrNull())
-                populateRow(views, R.id.row2_pct, R.id.row2_bar, R.id.row2_reset,
+                populateRow(context, views, R.id.row2_pct, R.id.row2_bar_fill, R.id.row2_reset,
                     pct = calcPct(extras["weekly.used"]?.toDoubleOrNull(), extras["weekly.cap"]?.toDoubleOrNull()),
                     resetSec = extras["weekly.resetInSec"]?.toLongOrNull())
-                populateRow(views, R.id.row3_pct, R.id.row3_bar, R.id.row3_reset,
+                populateRow(context, views, R.id.row3_pct, R.id.row3_bar_fill, R.id.row3_reset,
                     pct = calcPct(balance.monthlySpent, balance.totalQuota),
                     resetSec = extras["monthly.resetInSec"]?.toLongOrNull())
             }
@@ -465,12 +497,12 @@ private fun populateServiceRows(
                 val row3 = otherWindows.getOrNull(1) ?: Triple(monthlyLabel, null, null)
                 setRowLabel(views, row1.first, row2.first, row3.first)
                 listOf(
-                    Triple(R.id.row1_pct, R.id.row1_bar, R.id.row1_reset),
-                    Triple(R.id.row2_pct, R.id.row2_bar, R.id.row2_reset),
-                    Triple(R.id.row3_pct, R.id.row3_bar, R.id.row3_reset)
+                    Triple(R.id.row1_pct, R.id.row1_bar_fill, R.id.row1_reset),
+                    Triple(R.id.row2_pct, R.id.row2_bar_fill, R.id.row2_reset),
+                    Triple(R.id.row3_pct, R.id.row3_bar_fill, R.id.row3_reset)
                 ).forEachIndexed { index, ids ->
                     val window = when (index) { 0 -> row1; 1 -> row2; else -> row3 }
-                    populateRow(views, ids.first, ids.second, ids.third, pct = window.second, resetSec = window.third)
+                    populateRow(context, views, ids.first, ids.second, ids.third, pct = window.second, resetSec = window.third)
                 }
             }
             ServiceType.DEEPSEEK -> {
@@ -496,15 +528,15 @@ private fun populateServiceRows(
             }
             ServiceType.OLLAMA -> {
                 setRowLabel(views, context.getString(R.string.window_5h_short), context.getString(R.string.window_every_week), "")
-                populateRow(views, R.id.row1_pct, R.id.row1_bar, R.id.row1_reset,
+                populateRow(context, views, R.id.row1_pct, R.id.row1_bar_fill, R.id.row1_reset,
                     pct = extras["session.pct"]?.toFloatOrNull()?.toInt(),
                     resetSec = extras["session.resetAt"]?.toLongOrNull()?.let { (it - System.currentTimeMillis()) / 1000 }?.takeIf { it > 0 })
-                populateRow(views, R.id.row2_pct, R.id.row2_bar, R.id.row2_reset,
+                populateRow(context, views, R.id.row2_pct, R.id.row2_bar_fill, R.id.row2_reset,
                     pct = extras["weekly.pct"]?.toFloatOrNull()?.toInt(),
                     resetSec = extras["weekly.resetAt"]?.toLongOrNull()?.let { (it - System.currentTimeMillis()) / 1000 }?.takeIf { it > 0 })
                 views.setTextViewText(R.id.row3_label, "")
                 views.setTextViewText(R.id.row3_pct, "")
-                views.setProgressBar(R.id.row3_bar, 100, 0, false)
+                setBar(context, views, R.id.row3_bar_fill, 0)
                 views.setTextViewText(R.id.row3_reset, "")
                 val plan = extras["plan"] ?: ""
                 val titleText = if (plan.isNotEmpty()) {
@@ -524,6 +556,7 @@ private fun populateServiceRows(
     }
 
     private fun populateRow(
+        context: Context,
         views: RemoteViews,
         pctViewId: Int,
         barViewId: Int,
@@ -533,11 +566,10 @@ private fun populateServiceRows(
     ) {
         if (pct != null) {
             views.setTextViewText(pctViewId, "${pct}%")
-            views.setProgressBar(barViewId, 100, pct.coerceIn(0, 100), false)
-            setProgressColor(views, barViewId, pct)
+            setBar(context, views, barViewId, pct)
         } else {
             views.setTextViewText(pctViewId, "—")
-            views.setProgressBar(barViewId, 100, 0, false)
+            setBar(context, views, barViewId, 0)
         }
         if (resetSec != null && resetSec > 0) {
             views.setTextViewText(resetViewId, formatReset(resetSec))
@@ -546,13 +578,54 @@ private fun populateServiceRows(
         }
     }
 
-    private fun setProgressColor(views: RemoteViews, barViewId: Int, pct: Int) {
-        val color = when {
-            pct >= 80 -> 0xFFE91E63   // 紧张：红粉
-            pct >= 50 -> 0xFFFFA726   // 过半：橙
-            else -> 0xFF4CAF50        // < 50%：绿
+    /**
+     * 自绘进度条（barViewId 是填充 View 的 id，不是 ProgressBar）。
+     *
+     * 为什么不用 ProgressBar：小组件里的 ProgressBar 复用的是「宿主（桌面）主题」里的
+     * progressDrawable，应用完全控制不到它。HyperOS 4 换掉了这套 drawable ——
+     * 进度层不再是 clip、`@android:id/progress` 层级 id 也对不上，于是
+     * setProgress(level) 不再影响长度、tint 又 fallback 到整条 drawable 上，
+     * 结果三行永远等长、同色（数字正常，因为走的是 setTextViewText）。
+     * 自定义 progressDrawable 也只能绕开一半风险，所以这里彻底不碰它：
+     * 长度用 setScaleX（pct/100）+ setPivotX(0) 表达，颜色用 setBackgroundTintList，
+     * 两者都是 @RemotableViewMethod，任何版本的桌面都认。
+     */
+    private fun setBar(context: Context, views: RemoteViews, fillViewId: Int, pct: Int) {
+        val clamped = pct.coerceIn(0, 100)
+        val color = barColor(clamped)
+        try {
+            views.setFloat(fillViewId, "setPivotX", 0f)   // 从左边开始缩放
+            views.setFloat(fillViewId, "setScaleX", clamped / 100f)
+            views.setColorStateList(
+                fillViewId,
+                "setBackgroundTintList",
+                ColorStateList.valueOf(color.toInt())
+            )
+            // 关键取证：这三行是「我们认为屏幕该长什么样」。
+            // 与截图/实机对照即可判断是取值错了，还是宿主没执行这几条调用。
+            FileDebugLog.i(
+                context, "BAR",
+                "row" to rowTag(fillViewId),
+                "pct" to clamped,
+                "scaleX" to (clamped / 100f),
+                "color" to String.format(Locale.US, "#%06X", color and 0xFFFFFFL)
+            )
+        } catch (t: Throwable) {
+            FileDebugLog.e(context, "BAR_FAIL", t, "row" to rowTag(fillViewId), "pct" to clamped)
         }
-        views.setColorStateList(barViewId, "setProgressTintList", ColorStateList.valueOf(color.toInt()))
+    }
+
+    private fun rowTag(viewId: Int): String = when (viewId) {
+        R.id.row1_bar_fill -> "1"
+        R.id.row2_bar_fill -> "2"
+        R.id.row3_bar_fill -> "3"
+        else -> "id:$viewId"
+    }
+
+    private fun barColor(pct: Int): Long = when {
+        pct >= 80 -> 0xFFE91E63   // 紧张：红粉
+        pct >= 50 -> 0xFFFFA726   // 过半：橙
+        else -> 0xFF4CAF50        // < 50%：绿
     }
 
     private fun setEmptyState(views: RemoteViews, context: Context, service: ServiceType = ServiceType.OPENCODE_GO) {
@@ -572,8 +645,8 @@ private fun populateServiceRows(
         for (pctId in listOf(R.id.row1_pct, R.id.row2_pct, R.id.row3_pct)) {
             views.setTextViewText(pctId, "—")
         }
-        for (barId in listOf(R.id.row1_bar, R.id.row2_bar, R.id.row3_bar)) {
-            views.setProgressBar(barId, 100, 0, false)
+        for (barId in listOf(R.id.row1_bar_fill, R.id.row2_bar_fill, R.id.row3_bar_fill)) {
+            setBar(context, views, barId, 0)
         }
         for (resetId in listOf(R.id.row1_reset, R.id.row2_reset, R.id.row3_reset)) {
             views.setTextViewText(resetId, "")

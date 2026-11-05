@@ -159,12 +159,19 @@
             android:text="--" android:textColor="@color/widget_primary_text" android:textSize="15sp"
             android:textStyle="bold" android:gravity="end" />
 
-        <ProgressBar android:id="@+id/row1_bar"
-            style="@android:style/Widget.ProgressBar.Horizontal"
+        <!-- 自绘进度条：容器画底槽，子 View 画填充（setScaleX 表达百分比）。
+             不要换回系统 ProgressBar —— HyperOS 4 宿主主题的 progressDrawable
+             不认 level，会让三行永远满格同色。 -->
+        <FrameLayout android:id="@+id/row1_bar"
             android:layout_width="0dp" android:layout_height="7dp"
             android:layout_weight="1" android:layout_marginStart="8dp"
-            android:layout_marginEnd="8dp" android:max="100" android:progress="0"
-            android:progressTint="@color/widget_bar_5h" />
+            android:layout_marginEnd="8dp"
+            android:background="@drawable/widget_bar_track">
+
+            <View android:id="@+id/row1_bar_fill"
+                android:layout_width="match_parent" android:layout_height="match_parent"
+                android:background="@drawable/widget_bar_fill" />
+        </FrameLayout>
 
         <TextView android:id="@+id/row1_reset"
             android:layout_width="wrap_content"
@@ -197,12 +204,19 @@
             android:text="--" android:textColor="@color/widget_primary_text" android:textSize="15sp"
             android:textStyle="bold" android:gravity="end" />
 
-        <ProgressBar android:id="@+id/row2_bar"
-            style="@android:style/Widget.ProgressBar.Horizontal"
+        <!-- 自绘进度条：容器画底槽，子 View 画填充（setScaleX 表达百分比）。
+             不要换回系统 ProgressBar —— HyperOS 4 宿主主题的 progressDrawable
+             不认 level，会让三行永远满格同色。 -->
+        <FrameLayout android:id="@+id/row2_bar"
             android:layout_width="0dp" android:layout_height="7dp"
             android:layout_weight="1" android:layout_marginStart="8dp"
-            android:layout_marginEnd="8dp" android:max="100" android:progress="0"
-            android:progressTint="@color/widget_bar_weekly" />
+            android:layout_marginEnd="8dp"
+            android:background="@drawable/widget_bar_track">
+
+            <View android:id="@+id/row2_bar_fill"
+                android:layout_width="match_parent" android:layout_height="match_parent"
+                android:background="@drawable/widget_bar_fill" />
+        </FrameLayout>
 
         <TextView android:id="@+id/row2_reset"
             android:layout_width="wrap_content"
@@ -235,12 +249,19 @@
             android:text="--" android:textColor="@color/widget_primary_text" android:textSize="15sp"
             android:textStyle="bold" android:gravity="end" />
 
-        <ProgressBar android:id="@+id/row3_bar"
-            style="@android:style/Widget.ProgressBar.Horizontal"
+        <!-- 自绘进度条：容器画底槽，子 View 画填充（setScaleX 表达百分比）。
+             不要换回系统 ProgressBar —— HyperOS 4 宿主主题的 progressDrawable
+             不认 level，会让三行永远满格同色。 -->
+        <FrameLayout android:id="@+id/row3_bar"
             android:layout_width="0dp" android:layout_height="7dp"
             android:layout_weight="1" android:layout_marginStart="8dp"
-            android:layout_marginEnd="8dp" android:max="100" android:progress="0"
-            android:progressTint="@color/widget_bar_monthly" />
+            android:layout_marginEnd="8dp"
+            android:background="@drawable/widget_bar_track">
+
+            <View android:id="@+id/row3_bar_fill"
+                android:layout_width="match_parent" android:layout_height="match_parent"
+                android:background="@drawable/widget_bar_fill" />
+        </FrameLayout>
 
         <TextView android:id="@+id/row3_reset"
             android:layout_width="wrap_content"

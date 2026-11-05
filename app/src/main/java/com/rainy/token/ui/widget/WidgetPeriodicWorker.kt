@@ -11,7 +11,9 @@ import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import com.rainy.token.data.local.SecureStorage
 import com.rainy.token.data.local.appSettingsStore
+import com.rainy.token.data.debug.FileDebugLog
 import com.rainy.token.data.repository.WeatherRepository
+import com.rainy.token.data.weather.loadQWeatherCredentialWithMigration
 import com.rainy.token.domain.service.ServiceType
 import com.rainy.token.domain.usecase.RefreshBalanceUseCase
 import dagger.assisted.Assisted
@@ -53,10 +55,9 @@ class WidgetPeriodicWorker @AssistedInject constructor(
         try {
             val store = ctx.appSettingsStore
             val weatherEnabled = store.weatherEnabled.first()
-            // API Key 存在加密 SecureStorage 中，DataStore 里的 qweatherKey 不参与鉴权
-            val qweatherKey = secureStorage.getQWeatherKey().orEmpty()
-            val qweatherHost = store.qweatherHost.first()
-            if (weatherEnabled && qweatherKey.isNotBlank()) {
+            // 凭据存在加密 SecureStorage 中（JWT 私钥或旧版 API Key，旧格式自动迁移）
+            val credential = secureStorage.loadQWeatherCredentialWithMigration(store.qweatherHost.first())
+            if (weatherEnabled && credential.hasAuth) {
                 // 优先使用系统定位更新经纬度，失败则用上次缓存的坐标
                 val loc = weatherRepository.getCoarseLocation(ctx)
                 if (loc != null) {
@@ -72,23 +73,26 @@ class WidgetPeriodicWorker @AssistedInject constructor(
                     null
                 }
 
-                val snapshot = weatherRepository.fetchNow(
-                    apiKey = qweatherKey,
-                    apiHost = qweatherHost,
-                    latLon = latLon,
-                    context = ctx
-                )
-                if (snapshot != null) {
-                    store.setWeatherSnapshot(
-                        city = snapshot.city,
-                        text = snapshot.text,
-                        icon = snapshot.icon,
-                        temp = snapshot.tempC
+                when (
+                    val outcome = weatherRepository.fetchNow(
+                        credential = credential,
+                        latLon = latLon,
+                        context = ctx
                     )
+                ) {
+                    is WeatherRepository.Outcome.Ok -> store.setWeatherSnapshot(
+                        city = outcome.snapshot.city,
+                        text = outcome.snapshot.text,
+                        icon = outcome.snapshot.icon,
+                        temp = outcome.snapshot.tempC
+                    )
+                    is WeatherRepository.Outcome.Fail ->
+                        FileDebugLog.w(ctx, "WEATHER_SKIP", "why" to outcome.reason)
                 }
             }
-        } catch (_: Exception) {
-            // 静默失败
+        } catch (t: Exception) {
+            // 天气失败不影响额度展示，但必须留痕
+            FileDebugLog.e(ctx, "WEATHER_CRASH", t)
         }
 
         // 通知 Widget 更新

@@ -7,6 +7,10 @@ import androidx.lifecycle.viewModelScope
 import com.rainy.token.data.local.appSettingsStore
 import com.rainy.token.data.local.SecureStorage
 import com.rainy.token.data.repository.CredentialRepository
+import com.rainy.token.data.repository.WeatherRepository
+import com.rainy.token.data.weather.QWeatherCredential
+import com.rainy.token.data.weather.loadQWeatherCredentialWithMigration
+import com.rainy.token.data.weather.saveQWeatherCredential
 import com.rainy.token.domain.model.CredentialStatus
 import com.rainy.token.ui.widget.OpenCodeGoWidgetProvider
 import com.rainy.token.ui.widget.WidgetElement
@@ -18,6 +22,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -30,14 +35,26 @@ data class SettingsUiStateData(
     val widgetRefreshIntervalMin: Int = 15,
     val widgetSelectedServices: Set<String> = setOf("opencode_go", "commandcode_go", "codex", "ollama"),
     val weatherEnabled: Boolean = false,
-    val qweatherKey: String = "",
-    val qweatherHost: String = ""
+    val qweatherHost: String = "",
+    val qweatherCredential: QWeatherCredential = QWeatherCredential(),
+    val weatherTest: WeatherTestResult? = null
+)
+
+/** 设置页「测试连接」的结果，文案在 UI 层用 stringResource 组装 */
+data class WeatherTestResult(
+    val pending: Boolean = false,
+    val ok: Boolean = false,
+    val city: String = "",
+    val temp: String = "",
+    val text: String = "",
+    val error: String = ""
 )
 
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
     private val credentialRepository: CredentialRepository,
     private val secureStorage: SecureStorage,
+    private val weatherRepository: WeatherRepository,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
 
@@ -48,11 +65,13 @@ class SettingsViewModel @Inject constructor(
     val uiState: StateFlow<SettingsUiState> = _uiState.asStateFlow()
 
     /**
-     * QWeather API Key 存在加密的 SecureStorage 里，不是 DataStore 的 qweatherKey。
-     * 之前 UI 读的是 DataStore 那个从未被写入的字段，所以输入框永远显示空——
-     * 看着像"填不进去"，实际是写进去了但读不回来。
+     * 和风天气凭据（JWT 三件套 + 私钥）存在加密的 SecureStorage 里，
+     * DataStore 只留一个 host 字段给旧数据迁移兜底。
      */
-    private val _qweatherKey = MutableStateFlow("")
+    private val _qweatherCredential = MutableStateFlow(QWeatherCredential())
+
+    /** 「测试连接」的临时结果 */
+    private val _weatherTest = MutableStateFlow<WeatherTestResult?>(null)
 
     private val baseSettings: StateFlow<SettingsUiStateData> = kotlinx.coroutines.flow.combine(
         settings.themeKey,
@@ -75,8 +94,12 @@ class SettingsViewModel @Inject constructor(
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), SettingsUiStateData())
 
     val settingsState: StateFlow<SettingsUiStateData> =
-        kotlinx.coroutines.flow.combine(baseSettings, _qweatherKey) { base, key ->
-            base.copy(qweatherKey = key)
+        kotlinx.coroutines.flow.combine(
+            baseSettings,
+            _qweatherCredential,
+            _weatherTest
+        ) { base, credential, test ->
+            base.copy(qweatherCredential = credential, weatherTest = test)
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), SettingsUiStateData())
 
     /**
@@ -92,9 +115,10 @@ class SettingsViewModel @Inject constructor(
     val widgetBackground: StateFlow<Pair<Int?, Int>> = _widgetBackground.asStateFlow()
 
     init {
-        // 进入设置页时把已保存的 Key 读出来填进输入框
+        // 进入设置页时把已保存的凭据读出来填进输入框（旧版 API Key 自动迁移）
         viewModelScope.launch {
-            _qweatherKey.value = secureStorage.getQWeatherKey().orEmpty()
+            val legacyHost = settings.qweatherHost.first()
+            _qweatherCredential.value = secureStorage.loadQWeatherCredentialWithMigration(legacyHost)
         }
         loadWidgetStyles()
         refresh()
@@ -165,13 +189,15 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
-    fun setQWeatherKey(key: String) {
+    /** 编辑任一字段都走这里：先更新内存态（输入框立刻响应），再落盘 */
+    fun setQWeatherCredential(credential: QWeatherCredential) {
+        _qweatherCredential.value = credential
         viewModelScope.launch {
-            secureStorage.setQWeatherKey(key)
-            // 立刻回写到输入框，否则清空后 UI 仍显示旧值
-            _qweatherKey.value = key
-            // 填了 Key 就自动开启天气，无需额外开关
-            val enabled = key.isNotBlank()
+            secureStorage.saveQWeatherCredential(credential)
+            // host 同步写一份到 DataStore：旧版本迁移与 Worker 兜底要用
+            settings.setQweatherHost(credential.apiHost)
+            // 凭据齐全就自动开启天气，无需额外开关
+            val enabled = credential.hasAuth
             settings.setWeatherEnabled(enabled)
             if (enabled) {
                 WidgetPeriodicWorker.requestImmediate(application)
@@ -181,14 +207,47 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
-    fun setQWeatherHost(host: String) {
+    /**
+     * 测一次真实请求：优先用上次定位坐标，没有就用北京坐标兜底——
+     * 测试连接不该被"没给定位权限"挡住。
+     * 成功时顺手写入小组件缓存，点完就能在桌面上看到天气。
+     */
+    fun testWeatherConnection() {
+        val credential = _qweatherCredential.value
+        _weatherTest.value = WeatherTestResult(pending = true)
         viewModelScope.launch {
-            settings.setQweatherHost(host)
-            if (host.isNotBlank()) {
-                WidgetPeriodicWorker.requestImmediate(application)
+            val lat = settings.weatherLatitude.first()
+            val lon = settings.weatherLongitude.first()
+            val latLon = if (lat != 0f || lon != 0f) {
+                lat.toDouble() to lon.toDouble()
+            } else {
+                DEFAULT_TEST_LATITUDE to DEFAULT_TEST_LONGITUDE
+            }
+            val outcome = weatherRepository.fetchNow(credential, latLon, application)
+            _weatherTest.value = when (outcome) {
+                is WeatherRepository.Outcome.Ok -> WeatherTestResult(
+                    ok = true,
+                    city = outcome.snapshot.city,
+                    temp = outcome.snapshot.tempC,
+                    text = outcome.snapshot.text
+                )
+                is WeatherRepository.Outcome.Fail ->
+                    WeatherTestResult(ok = false, error = outcome.reason)
+            }
+            if (outcome is WeatherRepository.Outcome.Ok) {
+                settings.setWeatherSnapshot(
+                    city = outcome.snapshot.city,
+                    text = outcome.snapshot.text,
+                    icon = outcome.snapshot.icon,
+                    temp = outcome.snapshot.tempC
+                )
                 refreshWidgets()
             }
         }
+    }
+
+    fun clearWeatherTest() {
+        _weatherTest.value = null
     }
 
     // ─── 小组件元素样式 ───
@@ -223,6 +282,12 @@ class SettingsViewModel @Inject constructor(
             loadWidgetStyles()
             refreshWidgets()
         }
+    }
+
+    private companion object {
+        /** 测试连接用的兜底坐标：北京 */
+        const val DEFAULT_TEST_LATITUDE = 39.90
+        const val DEFAULT_TEST_LONGITUDE = 116.41
     }
 }
 

@@ -617,4 +617,22 @@
     <string name="open_design_five_hour_remaining">5-hour quota remaining %1$s%%</string>
     <string name="open_design_wallet_balance">Wallet %1$s%2$s</string>
     <string name="open_design_no_window_data">Control Key only: 5h/7d windows require a cookie</string>
+
+    <!-- QWeather JWT credentials -->
+    <string name="weather_cred_id">Credential ID (kid)</string>
+    <string name="weather_cred_id_hint">e.g. CMPKVETKD2</string>
+    <string name="weather_dev_id">Developer ID (iss)</string>
+    <string name="weather_dev_id_hint">Q + 9 characters, e.g. Q1A71C545A</string>
+    <string name="weather_project_id">Project ID (sub)</string>
+    <string name="weather_project_id_hint">e.g. 3ATN45BUJJ</string>
+    <string name="weather_private_key">Private key (PKCS#8 PEM)</string>
+    <string name="weather_private_key_hint">-----BEGIN PRIVATE KEY----- ...</string>
+    <string name="weather_jwt_note">QWeather requires JWT (EdDSA) signing since 2026 and retires API keys in 2027-01. Fill in the three IDs and your private key: the app signs a 15-minute token itself and renews it automatically. The private key never leaves this device and is stored encrypted.</string>
+    <string name="weather_test">Test connection</string>
+    <string name="weather_test_pending">Testing...</string>
+    <string name="weather_test_ok">OK · %1$s %2$s°C %3$s</string>
+    <string name="weather_test_fail">Failed · %1$s</string>
+    <string name="weather_legacy">Legacy API key / pasted JWT (optional)</string>
+    <string name="weather_legacy_hint">Only if this ROM cannot sign Ed25519</string>
+    <string name="weather_cred_incomplete">Fill in API Host + Credential ID + Developer ID + Project ID + Private key</string>
 </resources>

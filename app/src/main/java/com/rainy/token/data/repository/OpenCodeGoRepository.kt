@@ -99,6 +99,17 @@ class OpenCodeGoRepository(
 
         val session = resolveSessionCookie(credential)
 
+        // ① 主通道：/zen/go/v1/usage（Bearer API Key）。只需 API Key，不需要 console 会话，
+        //    响应只有三档窗口百分比 + 重置时间，字段面比 console 端点小得多。
+        tryFetchViaUsageApi(apiKey)?.let { balance ->
+            balanceCache.put(ServiceType.OPENCODE_GO, balance)
+            credentialRepository.save(credential.copy(lastVerifiedAt = System.currentTimeMillis()))
+            DebugLog.i(TAG, "zen/go/v1/usage ok: 5h=${balance.amount}%")
+            return@withContext Result.success(balance)
+        }
+        // ② 回退：console/api/go/status（老通道，tRPC/workspace 上下文，字段更全）
+        DebugLog.i(TAG, "zen/go/v1/usage 不可用，回退 console/api/go/status")
+
         val request = Request.Builder()
             .url(GO_STATUS_API)
             .header("User-Agent", DESKTOP_UA)
@@ -263,6 +274,97 @@ class OpenCodeGoRepository(
     }
 
     /**
+     * 走 `/zen/go/v1/usage` 取余额。
+     *
+     * 任何失败（404/500/非 JSON/没有 usage 节点）都返回 null 交给 console 回退——
+     * 这条通道只负责"能用就更快更稳"，不能因为它挂掉就让 OCGO 整块不可用。
+     * 失败原因写 DebugLog，便于下次改版时定位。
+     */
+    private fun tryFetchViaUsageApi(apiKey: String): ServiceBalance? {
+        val request = Request.Builder()
+            .url(USAGE_API)
+            .header("User-Agent", DESKTOP_UA)
+            .header("Accept", "application/json")
+            .header("Authorization", "Bearer $apiKey")
+            .get()
+            .build()
+
+        val body = try {
+            okHttpClient.newCall(request).execute().use { resp ->
+                val text = resp.body?.string().orEmpty()
+                if (!resp.isSuccessful) {
+                    DebugLog.w(TAG, "zen/go/v1/usage: HTTP ${resp.code} body=${text.take(200)}")
+                    return null
+                }
+                text
+            }
+        } catch (e: IOException) {
+            DebugLog.w(TAG, "zen/go/v1/usage: 网络失败 ${e.message}")
+            return null
+        } catch (e: Throwable) {
+            DebugLog.w(TAG, "zen/go/v1/usage: 异常 ${e.javaClass.simpleName}: ${e.message}")
+            return null
+        }
+
+        return parseUsageApi(body)
+    }
+
+    /**
+     * 解析 `/zen/go/v1/usage`：
+     * ```
+     * {"usage":{"rolling":{"percent":12.5,"resetsAt":"2026-10-05T00:00:00Z"}, ...}}
+     * ```
+     * - `percent` 缺失/非数字 → 跳过该窗口，不猜数值
+     * - `resetsAt` 兼容 ISO-8601 与 epoch（秒/毫秒）
+     * - 顶层直接给 rolling/weekly/monthly 的变体也认（个别部署不套 usage 节点）
+     */
+    private fun parseUsageApi(body: String): ServiceBalance? {
+        val root = try {
+            json.parseToJsonElement(body).jsonObject
+        } catch (_: Exception) {
+            DebugLog.w(TAG, "zen/go/v1/usage: 响应不是 JSON object")
+            return null
+        }
+        val usage = root["usage"]?.jsonObject ?: root
+        val now = System.currentTimeMillis()
+
+        var primaryPct: Double? = null
+        var primaryReset: Long? = null
+        val extras = mutableMapOf<String, String>()
+        for ((field, prefix) in listOf(
+            "rolling" to "rolling",
+            "weekly" to "weekly",
+            "monthly" to "monthly"
+        )) {
+            val node = usage[field]?.jsonObject ?: continue
+            val pct = node["percent"]?.jsonPrimitive?.contentOrNull?.toDoubleOrNull() ?: continue
+            if (!pct.isFinite()) continue
+            val clamped = pct.coerceIn(0.0, 100.0)
+            val resetAt = node["resetsAt"]?.asEpochMillisOrNull()
+            extras["$prefix.pct"] = clamped.toString()
+            resetAt?.let { extras["$prefix.resetInSec"] = ((it - now) / 1000).coerceAtLeast(0L).toString() }
+            if (primaryPct == null) {
+                primaryPct = clamped
+                primaryReset = resetAt
+            }
+        }
+        val pct = primaryPct ?: return null
+        extras["product"] = "go"
+        extras["planName"] = "Go"
+        // 原始百分比落日志：与 Console 页面对不上时，一眼就能看出是口径（used/remaining）问题
+        DebugLog.i(TAG, "zen/go/v1/usage windows: " + extras.filterKeys { it.endsWith(".pct") })
+
+        return ServiceBalance(
+            service = ServiceType.OPENCODE_GO,
+            amount = pct,
+            unit = "%",
+            isAvailable = true,
+            nextResetAt = primaryReset,
+            extras = extras
+        )
+    }
+
+    /**
      * 解析会话 Cookie 值。
      *
      * 新版 Console 的会话 cookie 名是 `__Host-console_session`（生产）/ `console_session`（开发）。
@@ -400,6 +502,13 @@ class OpenCodeGoRepository(
 
         /** 新版 Console 的 Go 配额端点（tRPC，JSON） */
         private const val GO_STATUS_API = "$WEB_ORIGIN/console/api/go/status"
+        /**
+         * 官方 Service API 面的用量端点（Bearer API Key）：
+         * `{"usage":{"rolling":{"percent":..,"resetsAt":..},"weekly":{..},"monthly":{..}}}`
+         * 不依赖 console 的 session/workspace 上下文，是最抗改版的一条路。
+         * 上游 RainyToken 与 CodexBar 都已切到它，这里作为主通道、console 端点作回退。
+         */
+        private const val USAGE_API = "$WEB_ORIGIN/zen/go/v1/usage"
         private const val MODELS_API = "https://models.dev/api.json"
         private const val CHAT_API = "https://opencode.ai/zen/go/v1/chat/completions"
 

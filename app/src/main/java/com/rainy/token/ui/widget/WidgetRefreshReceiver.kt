@@ -3,6 +3,9 @@ package com.rainy.token.ui.widget
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import com.rainy.token.data.debug.FileDebugLog
+import com.rainy.token.data.repository.WeatherRepository
+import com.rainy.token.data.weather.loadQWeatherCredentialWithMigration
 import com.rainy.token.data.local.appSettingsStore
 import com.rainy.token.domain.service.ServiceType
 import dagger.hilt.android.EntryPointAccessors
@@ -22,7 +25,11 @@ class WidgetRefreshReceiver : BroadcastReceiver() {
         if (intent.action != ACTION) return
 
         val appContext = context.applicationContext
-        if (isRefreshing) return
+        FileDebugLog.i(appContext, "REFRESH_START")
+        if (isRefreshing) {
+            FileDebugLog.w(appContext, "REFRESH_SKIP", "why" to "already-running")
+            return
+        }
         isRefreshing = true
         val pendingResult = goAsync()
         val entryPoint = EntryPointAccessors.fromApplication(
@@ -47,10 +54,9 @@ class WidgetRefreshReceiver : BroadcastReceiver() {
                 try {
                     val store = appContext.appSettingsStore
                     val weatherEnabled = store.weatherEnabled.first()
-                    // API Key 存在加密 SecureStorage 中
-                    val qweatherKey = secureStorage.getQWeatherKey().orEmpty()
-                    val qweatherHost = store.qweatherHost.first()
-                    if (weatherEnabled && qweatherKey.isNotBlank()) {
+                    // 凭据存在加密 SecureStorage 中（JWT 私钥或旧版 API Key，旧格式自动迁移）
+                    val credential = secureStorage.loadQWeatherCredentialWithMigration(store.qweatherHost.first())
+                    if (weatherEnabled && credential.hasAuth) {
                         val loc = weatherRepository.getCoarseLocation(appContext)
                         if (loc != null) {
                             store.setWeatherLocation(loc.latitude.toFloat(), loc.longitude.toFloat())
@@ -63,30 +69,38 @@ class WidgetRefreshReceiver : BroadcastReceiver() {
                             cachedLat.toDouble() to cachedLon.toDouble()
                         } else null
 
-                        val snapshot = weatherRepository.fetchNow(
-                            apiKey = qweatherKey,
-                            apiHost = qweatherHost,
-                            latLon = latLon,
-                            context = appContext
-                        )
-                        if (snapshot != null) {
-                            store.setWeatherSnapshot(
-                                city = snapshot.city,
-                                text = snapshot.text,
-                                icon = snapshot.icon,
-                                temp = snapshot.tempC
+                        when (
+                            val outcome = weatherRepository.fetchNow(
+                                credential = credential,
+                                latLon = latLon,
+                                context = appContext
                             )
+                        ) {
+                            is WeatherRepository.Outcome.Ok -> store.setWeatherSnapshot(
+                                city = outcome.snapshot.city,
+                                text = outcome.snapshot.text,
+                                icon = outcome.snapshot.icon,
+                                temp = outcome.snapshot.tempC
+                            )
+                            is WeatherRepository.Outcome.Fail ->
+                                FileDebugLog.w(appContext, "WEATHER_SKIP", "why" to outcome.reason)
                         }
                     }
-                } catch (_: Exception) {
-                    // 静默失败
+                } catch (t: Exception) {
+                    // 静默失败，但要留痕：天气挂了不影响额度展示
+                    FileDebugLog.w(
+                        appContext, "WEATHER_FAIL",
+                        "err" to (t.message ?: t.javaClass.simpleName)
+                    )
                 }
 
+                FileDebugLog.i(appContext, "REFRESH_DONE", "ok" to refreshed)
                 if (refreshed) {
                     OpenCodeGoWidgetProvider.notifyDataChanged(appContext)
                 }
-            } catch (_: Exception) {
-                // 静默，Widget 保留旧数据
+            } catch (t: Exception) {
+                // 静默，Widget 保留旧数据；但必须留下痕迹，否则线上无从排查
+                FileDebugLog.e(appContext, "REFRESH_FAIL", t)
             } finally {
                 isRefreshing = false
                 pendingResult.finish()

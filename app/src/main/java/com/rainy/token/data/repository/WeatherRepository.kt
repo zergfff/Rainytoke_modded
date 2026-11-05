@@ -6,24 +6,32 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.location.LocationManager
 import androidx.core.content.ContextCompat
+import com.rainy.token.data.debug.FileDebugLog
+import com.rainy.token.data.weather.QWeatherCredential
+import com.rainy.token.data.weather.QWeatherJwt
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONObject
+import java.util.Locale
 import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
  * 和风天气（QWeather）API 封装。
  *
- * 使用 **实时天气 v7**（`weather/now`）+ 开发者专属 API Host。
- * 认证：`key=<API KEY>` 查询参数（API KEY 签名方式已废弃）。
+ * 鉴权两代并存：
+ * - **JWT（推荐）**：`Authorization: Bearer <token>`，token 由 [QWeatherJwt] 用控制台
+ *   私钥在本机签发（EdDSA/Ed25519），15 分钟一换、自动续签。
+ * - **API KEY（旧）**：`?key=` 查询参数，和风天气 2027-01 停用，仅作兼容。
  *
- * 定位优先使用上次成功定位的经纬度（由 WidgetPeriodicWorker 按刷新间隔更新），
- * 无缓存时才回退到系统 LocationManager 粗略定位。
+ * 请求链：GeoAPI 反查城市（`/geo/v2/city/lookup`）→ 实时天气（`/v7/weather/now`）。
+ * 两个请求都必须打到**账号自己的 API Host**；公共域名（api./devapi.qweather.com）
+ * 自 2026 年起返回 `403 Invalid Host`。
  *
- * 返回 Snapshot(city, tempC, text, icon) 或 null。
+ * 失败一律返回 [Outcome.Fail] 且带人能看懂的原因（含 HTTP 状态/和风返回码），
+ * 这样设置页的「测试连接」和文件日志都能直接看出是 kid/iss/sub、host、额度还是网络的问题。
  */
 @Singleton
 class WeatherRepository @Inject constructor(
@@ -37,112 +45,162 @@ class WeatherRepository @Inject constructor(
         val icon: String
     )
 
+    sealed interface Outcome {
+        data class Ok(val snapshot: Snapshot) : Outcome
+        data class Fail(val reason: String) : Outcome
+    }
+
     /**
-     * 获取当前天气快照。
+     * 拉取当前天气。
      *
-     * @param apiKey 和风天气 API KEY
-     * @param apiHost 开发者专属 API Host，如 abc123.def.qweatherapi.com
-     *                留空则回退到旧共享域名（2026 起逐步停用，仅兜底）
-     * @param latLon 已知经纬度（来自设置或上次定位），为 null 时自动定位
-     * @param context 应用上下文，用于回退定位
+     * @param credential 和风天气凭证（JWT 私钥或旧版 API Key）
+     * @param latLon 已知经纬度；为空时尝试系统粗定位（需定位权限）
+     * @param context 应用上下文，用于兜底定位与文件日志，可为空
      */
     suspend fun fetchNow(
-        apiKey: String,
-        apiHost: String = "",
+        credential: QWeatherCredential,
         latLon: Pair<Double, Double>? = null,
         context: Context? = null
-    ): Snapshot? {
-        if (apiKey.isBlank()) return null
+    ): Outcome = withContext(Dispatchers.IO) {
+        if (!credential.hasAuth) return@withContext Outcome.Fail(REASON_NO_CREDENTIAL)
 
-        return withContext(Dispatchers.IO) {
-            try {
-                // 1. 确定经纬度：优先入参，其次系统定位
-                val (lat, lon) = latLon ?: (context?.let { getCoarseLocation(it) }?.let {
-                    it.latitude to it.longitude
-                } ?: return@withContext null)
+        val host = credential.normalizedHost()
+        if (host.isBlank()) return@withContext Outcome.Fail(REASON_NO_HOST)
 
-                // 公共域名（devapi.qweather.com 等）自 2026 年起返回 403 Invalid Host，
-                // 必须使用控制台里的专属 API Host。未配置时直接放弃，并在日志里给出明确原因，
-                // 避免静默失败让用户以为天气功能坏了。
-                val host = apiHost.trim()
-                    .removePrefix("https://").removePrefix("http://")
-                    .trimEnd('/')
-                if (host.isBlank()) {
-                    android.util.Log.w(
-                        TAG,
-                        "天气未配置 API Host：请在设置页填写控制台中的 API Host" +
-                        "（形如 abc123.def.qweatherapi.com）。公共域名已停用。"
-                    )
-                    return@withContext null
+        try {
+            val coordinates = latLon
+                ?: context?.let { getCoarseLocation(it) }?.let { it.latitude to it.longitude }
+                ?: return@withContext Outcome.Fail(REASON_NO_LOCATION)
+            val (lat, lon) = coordinates
+
+            // 鉴权头：本机签发 JWT > 粘贴的现成 JWT > 旧版 ?key=
+            val bearer: String?
+            val keyQuery: String
+            when {
+                credential.usesJwt -> {
+                    bearer = try {
+                        QWeatherJwt.token(credential)
+                    } catch (t: Throwable) {
+                        log(context, "WEATHER_JWT_FAIL", "err" to describe(t))
+                        return@withContext Outcome.Fail("私钥签名失败：" + describe(t))
+                    }
+                    keyQuery = ""
                 }
+                credential.pastedToken.isNotEmpty() -> {
+                    bearer = credential.pastedToken
+                    keyQuery = ""
+                }
+                else -> {
+                    bearer = null
+                    keyQuery = "&key=" + credential.apiKey.trim()
+                }
+            }
 
-                // 2. Geo lookup（v2 city/lookup，按经纬度反查城市）
-                // 凭据支持 API KEY（?key=）与 JWT（Authorization: Bearer）。
-                // QWeather 从 2027-02 起逐步限制 API KEY，JWT 是官方推荐方式。
-                val jwt = isJwtCredential(apiKey)
-                val authQuery = if (jwt) "" else "&key=$apiKey"
-                val bearer = if (jwt) apiKey else null
+            // 1. GeoAPI：经纬度 → 城市 ID/名称
+            val geoUrl = "https://$host/geo/v2/city/lookup" +
+                "?location=" + String.format(Locale.US, "%.2f", lon) +
+                "," + String.format(Locale.US, "%.2f", lat) + keyQuery
+            val (geoStatus, geoBody) = httpGet(geoUrl, bearer)
+            if (geoStatus != HTTP_OK || geoBody == null) {
+                return@withContext fail(context, "GEO", geoStatus, geoBody)
+            }
+            val locations = JSONObject(geoBody).optJSONArray("location")
+                ?: return@withContext fail(context, "GEO", geoStatus, geoBody)
+            if (locations.length() == 0) {
+                return@withContext Outcome.Fail("城市反查无结果（经纬度 $lat,$lon）")
+            }
+            val first = locations.getJSONObject(0)
+            val cityId = first.optString("id", "")
+            val cityName = first.optString("name", "")
+            if (cityId.isBlank()) return@withContext fail(context, "GEO", geoStatus, geoBody)
 
-                val lonText = "%.2f".format(lon)
-                val latText = "%.2f".format(lat)
-                val geoUrl = "https://$host/geo/v2/city/lookup" +
-                    "?location=$lonText,$latText$authQuery"
-                val geoBody = httpGet(geoUrl, bearer) ?: return@withContext null
-                val geoJson = JSONObject(geoBody)
-                if (geoJson.optString("code") != "200") return@withContext null
+            // 2. 实时天气 v7
+            val weatherUrl = "https://$host/v7/weather/now?location=$cityId&lang=zh$keyQuery"
+            val (weatherStatus, weatherBody) = httpGet(weatherUrl, bearer)
+            if (weatherStatus != HTTP_OK || weatherBody == null) {
+                return@withContext fail(context, "NOW", weatherStatus, weatherBody)
+            }
+            val weatherJson = JSONObject(weatherBody)
+            if (weatherJson.optString("code") != "200") {
+                return@withContext fail(context, "NOW", weatherStatus, weatherBody)
+            }
+            val now = weatherJson.optJSONObject("now")
+                ?: return@withContext Outcome.Fail("天气响应缺少 now 字段")
 
-                val locations = geoJson.optJSONArray("location")
-                    ?: return@withContext null
-                if (locations.length() == 0) return@withContext null
-                val cityId = locations.getJSONObject(0).optString("id", "")
-                val cityName = locations.getJSONObject(0).optString("name", "")
-                if (cityId.isBlank()) return@withContext null
-
-                // 3. 实时天气 v7
-                val weatherUrl = "https://$host/v7/weather/now" +
-                    "?location=$cityId&lang=zh$authQuery"
-                val weatherBody = httpGet(weatherUrl, bearer) ?: return@withContext null
-                val weatherJson = JSONObject(weatherBody)
-                if (weatherJson.optString("code") != "200") return@withContext null
-
-                val now = weatherJson.optJSONObject("now") ?: return@withContext null
+            log(
+                context, "WEATHER_OK",
+                "city" to cityName,
+                "temp" to now.optString("temp", ""),
+                "text" to now.optString("text", ""),
+                "auth" to when {
+                    credential.usesJwt -> "jwt"
+                    credential.pastedToken.isNotEmpty() -> "jwt-pasted"
+                    else -> "key"
+                }
+            )
+            Outcome.Ok(
                 Snapshot(
                     city = cityName,
                     tempC = now.optString("temp", "--"),
                     text = now.optString("text", ""),
                     icon = now.optString("icon", "")
                 )
-            } catch (_: Exception) {
-                null
-            }
+            )
+        } catch (t: Throwable) {
+            log(context, "WEATHER_FAIL", "err" to describe(t))
+            Outcome.Fail(describe(t))
         }
     }
 
-    private fun httpGet(url: String, bearer: String? = null): String? {
+    /** 返回 (HTTP 状态码, 响应体)。失败也把 body 带回来，里面是和风的错误码。 */
+    private fun httpGet(url: String, bearer: String?): Pair<Int, String?> {
         val request = Request.Builder()
             .url(url)
             .header("Accept", "application/json")
             .apply { bearer?.let { header("Authorization", "Bearer $it") } }
             .get()
             .build()
-        val response = okHttpClient.newCall(request).execute()
-        return try {
-            val body = response.body?.string()
-            if (!response.isSuccessful) {
-                android.util.Log.w(TAG, "QWeather HTTP ${response.code}: ${body?.take(200)}")
-                null
-            } else {
-                body
-            }
-        } finally {
-            response.close()
+        return okHttpClient.newCall(request).execute().use { response ->
+            response.code to response.body?.string()
         }
     }
 
-    /** QWeather JWT 形如 `eyJ...header.eyJ...payload.signature`（三段、点分隔）。 */
-    internal fun isJwtCredential(credential: String): Boolean {
-        val parts = credential.trim().split('.')
-        return parts.size == 3 && parts.all { it.isNotBlank() } && parts[0].startsWith("eyJ")
+    /** 统一失败出口：记日志 + 给人话原因 */
+    private fun fail(context: Context?, stage: String, http: Int, body: String?): Outcome.Fail {
+        val apiCode = body?.let { raw ->
+            runCatching { JSONObject(raw).optString("code") }.getOrNull()
+        }.orEmpty()
+        val reason = describe(http, apiCode)
+        log(
+            context, "WEATHER_FAIL",
+            "stage" to stage,
+            "http" to http,
+            "api" to apiCode,
+            "body" to (body?.take(200) ?: "")
+        )
+        return Outcome.Fail(reason)
+    }
+
+    private fun describe(http: Int, apiCode: String = ""): String {
+        val code = apiCode.trim()
+        if (code.isNotEmpty() && code != "200") return "和风返回码 $code"
+        return when (http) {
+            HTTP_OK -> "响应解析失败"
+            400 -> "HTTP 400 参数不合法（经纬度或城市 ID）"
+            401 -> "HTTP 401 鉴权失败：凭据 ID / 开发者 ID / 项目 ID 或私钥不匹配，或 token 过期"
+            403 -> "HTTP 403 被拒绝：API Host 不对（公共域名已停用），或额度/权限受限"
+            404 -> "HTTP 404 路径不存在：检查 API Host 是否填成了别的地址"
+            429 -> "HTTP 429 请求过于频繁（QPM 超限，稍后再试）"
+            else -> "HTTP $http"
+        }
+    }
+
+    private fun describe(t: Throwable): String =
+        (t.javaClass.simpleName + ": " + (t.message ?: "")).trim()
+
+    private fun log(context: Context?, event: String, vararg fields: Pair<String, Any?>) {
+        val ctx = context ?: return
+        FileDebugLog.i(ctx, event, *fields)
     }
 
     @SuppressLint("MissingPermission")
@@ -181,6 +239,11 @@ class WeatherRepository @Inject constructor(
 
     companion object {
         private const val TAG = "WeatherRepository"
+        private const val HTTP_OK = 200
+
+        const val REASON_NO_CREDENTIAL = "未配置和风天气凭据"
+        const val REASON_NO_HOST = "未配置 API Host（公共域名已停用，请填控制台里的专属 Host）"
+        const val REASON_NO_LOCATION = "没有可用经纬度：定位权限未授予，也没有缓存坐标"
 
         /**
          * 按和风天气图标码返回本地 vector drawable 资源名。

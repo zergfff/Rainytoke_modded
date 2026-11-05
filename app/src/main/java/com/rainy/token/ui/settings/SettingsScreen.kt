@@ -67,6 +67,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.rainy.token.domain.model.CredentialStatus
+import com.rainy.token.data.weather.QWeatherCredential
 import com.rainy.token.domain.service.ServiceType
 import com.rainy.token.ui.components.ServiceIcon
 import com.rainy.token.ui.components.StatusChip
@@ -218,13 +219,13 @@ fun SettingsScreen(
                     BackgroundRefreshCard()
                 }
 
-                // 天气配置
+                // 天气配置（和风天气 JWT：三个 ID + 私钥，APP 自己签发 token）
                 item {
                     WeatherConfigCard(
-                        qweatherKey = settingsState.qweatherKey,
-                        qweatherHost = settingsState.qweatherHost,
-                        onQWeatherKeyChanged = { viewModel.setQWeatherKey(it) },
-                        onQWeatherHostChanged = { viewModel.setQWeatherHost(it) }
+                        credential = settingsState.qweatherCredential,
+                        testResult = settingsState.weatherTest,
+                        onCredentialChanged = { viewModel.setQWeatherCredential(it) },
+                        onTest = { viewModel.testWeatherConnection() }
                     )
                 }
 
@@ -495,13 +496,13 @@ private fun RefreshIntervalCard(
     }
 }
 
-// ─── 天气配置卡片 ───
+// ─── 天气配置卡片（和风天气 JWT / EdDSA） ───
 @Composable
 private fun WeatherConfigCard(
-    qweatherKey: String,
-    qweatherHost: String,
-    onQWeatherKeyChanged: (String) -> Unit,
-    onQWeatherHostChanged: (String) -> Unit
+    credential: QWeatherCredential,
+    testResult: WeatherTestResult?,
+    onCredentialChanged: (QWeatherCredential) -> Unit,
+    onTest: () -> Unit
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -510,73 +511,145 @@ private fun WeatherConfigCard(
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
+            Text(
+                text = stringResource(R.string.title_weather),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = stringResource(R.string.weather_jwt_note),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // 公共域名已停用，Host 没填天气必然失败——先红字说清楚，别等静默失败
+            if (credential.apiHost.isBlank()) {
                 Text(
-                    text = stringResource(R.string.title_weather),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.weight(1f)
+                    text = stringResource(R.string.weather_host_required),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error
                 )
+                Spacer(modifier = Modifier.height(8.dp))
             }
-            // 凭据输入区始终可见：用户必须能先填 Key/Host 再启用天气，
-            // 否则会出现"开关打开了但没有凭据"的死循环。
-            run {
-                // 公共域名已停用，未填 Host 时天气必然失败——提前告知，避免静默失败
-                if (qweatherHost.isBlank()) {
+
+            WeatherInput(
+                label = stringResource(R.string.weather_qweather_host),
+                hint = stringResource(R.string.weather_qweather_host_hint),
+                value = credential.apiHost,
+                onChange = { onCredentialChanged(credential.copy(apiHost = it.trim())) }
+            )
+            WeatherInput(
+                label = stringResource(R.string.weather_cred_id),
+                hint = stringResource(R.string.weather_cred_id_hint),
+                value = credential.credentialId,
+                onChange = { onCredentialChanged(credential.copy(credentialId = it.trim())) }
+            )
+            WeatherInput(
+                label = stringResource(R.string.weather_dev_id),
+                hint = stringResource(R.string.weather_dev_id_hint),
+                value = credential.developerId,
+                onChange = { onCredentialChanged(credential.copy(developerId = it.trim())) }
+            )
+            WeatherInput(
+                label = stringResource(R.string.weather_project_id),
+                hint = stringResource(R.string.weather_project_id_hint),
+                value = credential.projectId,
+                onChange = { onCredentialChanged(credential.copy(projectId = it.trim())) }
+            )
+            WeatherInput(
+                label = stringResource(R.string.weather_private_key),
+                hint = stringResource(R.string.weather_private_key_hint),
+                value = credential.privateKey,
+                singleLine = false,
+                onChange = { onCredentialChanged(credential.copy(privateKey = it)) }
+            )
+            // 兜底通道：旧版 API Key，或手工粘贴的现成 JWT
+            WeatherInput(
+                label = stringResource(R.string.weather_legacy),
+                hint = stringResource(R.string.weather_legacy_hint),
+                value = credential.apiKey,
+                onChange = { onCredentialChanged(credential.copy(apiKey = it.trim())) }
+            )
+
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                TextButton(onClick = onTest, enabled = credential.hasAuth) {
+                    Text(stringResource(R.string.weather_test))
+                }
+                if (testResult?.pending == true) {
+                    CircularProgressIndicator(
+                        modifier = Modifier
+                            .width(16.dp)
+                            .height(16.dp),
+                        strokeWidth = 2.dp
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = stringResource(R.string.weather_host_required),
+                        text = stringResource(R.string.weather_test_pending),
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.error
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = stringResource(R.string.weather_qweather_key),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                TextField(
-                    value = qweatherKey,
-                    onValueChange = onQWeatherKeyChanged,
-                    placeholder = { Text(stringResource(R.string.weather_qweather_key_hint)) },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                    colors = TextFieldDefaults.colors(
-                        focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
-                        unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant
+            }
+            testResult?.let { result ->
+                if (!result.pending) {
+                    Text(
+                        text = if (result.ok) {
+                            stringResource(
+                                R.string.weather_test_ok,
+                                result.city,
+                                result.temp,
+                                result.text
+                            )
+                        } else {
+                            stringResource(R.string.weather_test_fail, result.error)
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (result.ok) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.error
+                        }
                     )
-                )
-                Spacer(modifier = Modifier.height(12.dp))
-                Text(
-                    text = stringResource(R.string.weather_qweather_host),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                TextField(
-                    value = qweatherHost,
-                    onValueChange = onQWeatherHostChanged,
-                    placeholder = { Text(stringResource(R.string.weather_qweather_host_hint)) },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                    colors = TextFieldDefaults.colors(
-                        focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
-                        unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant
-                    )
-                )
+                }
+            }
+            if (!credential.hasAuth) {
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = stringResource(R.string.weather_qweather_host_note),
+                    text = stringResource(R.string.weather_cred_incomplete),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }
     }
+}
+
+@Composable
+private fun WeatherInput(
+    label: String,
+    hint: String,
+    value: String,
+    onChange: (String) -> Unit,
+    singleLine: Boolean = true
+) {
+    Text(
+        text = label,
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant
+    )
+    Spacer(modifier = Modifier.height(4.dp))
+    OutlinedTextField(
+        value = value,
+        onValueChange = onChange,
+        placeholder = { Text(hint) },
+        modifier = Modifier.fillMaxWidth(),
+        singleLine = singleLine,
+        minLines = if (singleLine) 1 else 3,
+        maxLines = if (singleLine) 1 else 6
+    )
+    Spacer(modifier = Modifier.height(10.dp))
 }
 
 // ─── 语言卡片 ───

@@ -610,4 +610,22 @@
     <string name="open_design_five_hour_remaining">5 小时额度剩余 %1$s%%</string>
     <string name="open_design_wallet_balance">钱包余额 %1$s%2$s</string>
     <string name="open_design_no_window_data">仅控制密钥模式：5 小时 / 7 天窗口需要 Cookie</string>
+
+    <!-- 和风天气 JWT 凭据 -->
+    <string name="weather_cred_id">凭据 ID（kid）</string>
+    <string name="weather_cred_id_hint">例如 CMPKVETKD2</string>
+    <string name="weather_dev_id">开发者 ID（iss）</string>
+    <string name="weather_dev_id_hint">Q 开头 10 位，例如 Q1A71C545A</string>
+    <string name="weather_project_id">项目 ID（sub）</string>
+    <string name="weather_project_id_hint">例如 3ATN45BUJJ</string>
+    <string name="weather_private_key">私钥（PKCS#8 PEM）</string>
+    <string name="weather_private_key_hint">-----BEGIN PRIVATE KEY----- ...</string>
+    <string name="weather_jwt_note">和风天气 2026 年起强制 JWT（EdDSA）签名，API KEY 于 2027-01 停用。填上面三个 ID 和私钥即可：APP 自己签发 15 分钟有效的 token 并自动续签。私钥只加密存在本机，不会上传。</string>
+    <string name="weather_test">测试连接</string>
+    <string name="weather_test_pending">正在测试...</string>
+    <string name="weather_test_ok">连接成功 · %1$s %2$s°C %3$s</string>
+    <string name="weather_test_fail">连接失败 · %1$s</string>
+    <string name="weather_legacy">旧版 API Key / 手工粘贴 JWT（可选）</string>
+    <string name="weather_legacy_hint">仅在本机无法做 Ed25519 签名时使用</string>
+    <string name="weather_cred_incomplete">请填全 API Host + 凭据 ID + 开发者 ID + 项目 ID + 私钥</string>
 </resources>
