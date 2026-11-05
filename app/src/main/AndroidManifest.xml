@@ -80,24 +80,20 @@
             <meta-data
                 android:name="android.appwidget.provider"
                 android:resource="@xml/widget_opencode_go_info" />
-            <!-- MIUI Widget 核心标识 -->
-            <meta-data
-                android:name="miuiWidget"
-                android:value="true" />
-            <!-- MIUI 曝光刷新：用户滑动到小组件所在页面时自动触发 -->
-            <meta-data
-                android:name="miuiWidgetRefresh"
-                android:value="exposure" />
-            <!-- 曝光刷新最小间隔 20 秒（官方最短为 10 秒） -->
-            <meta-data
-                android:name="miuiWidgetRefreshMinInterval"
-                android:value="20000" />
-        </receiver>
+            <!--
+              MIUI 小部件专属标识（miuiWidget / miuiWidgetRefresh /
+              miuiWidgetRefreshMinInterval / miuiWidgetVersion）已移除。
 
-        <!-- MIUI Widget 版本号（application 级，升级时递增） -->
-        <meta-data
-            android:name="miuiWidgetVersion"
-            android:value="2" />
+              原因：一旦声明 miuiWidget=true，MIUI 只把小部件当作「小米小部件」，
+              并且按 miuiWidgetVersion 去小米小部件平台匹配已审核条目；本 APP 是自编译
+              APK，平台侧没有对应版本的条目，于是小部件中心里**整个 APP 都不出现**
+              （实测三处入口全空：系统小部件管理器 / 长按图标 / APP 内 +）。
+
+              去掉这些标识后退回「普通 Android 小组件」：MIUI 会把它放进原生组件列表，
+              一定能被列出。代价是失去曝光刷新，改由 updatePeriodMillis（30 分钟）
+              + WidgetPeriodicWorker（15 分钟）驱动刷新。
+            -->
+        </receiver>
 
     </application>
 

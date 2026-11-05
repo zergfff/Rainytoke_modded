@@ -35,6 +35,40 @@ class RainyTokenApplication : Application(), Configuration.Provider {
                 .build()
         }
 
+    /**
+     * 小组件 provider 组件自愈。
+     *
+     * MIUI 在「最后一个小组件被移除」后可能把 receiver 组件标记为 disabled，
+     * 之后小部件中心里就再也找不到这个 APP。这里每次启动检查一次并重新启用，
+     * 保证用户总能重新添加小组件（失败也不影响 APP 启动）。
+     */
+    private fun ensureWidgetProviderEnabled() {
+        try {
+            val component = android.content.ComponentName(
+                this,
+                com.rainy.token.ui.widget.OpenCodeGoWidgetProvider::class.java
+            )
+            val state = packageManager.getComponentEnabledSetting(component)
+            val disabled = state == android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DISABLED ||
+                state == android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DISABLED_USER ||
+                state == android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DISABLED_UNTIL_USED
+            android.util.Log.d("RainyApp", "widget provider enabled state=$state disabled=$disabled")
+            if (disabled) {
+                packageManager.setComponentEnabledSetting(
+                    component,
+                    android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
+                    android.content.pm.PackageManager.DONT_KILL_APP
+                )
+                com.rainy.token.data.debug.FileDebugLog.i(
+                    this, "WIDGET_REENABLED",
+                    "oldState" to state
+                )
+            }
+        } catch (t: Throwable) {
+            android.util.Log.w("RainyApp", "ensureWidgetProviderEnabled 失败", t)
+        }
+    }
+
     override fun attachBaseContext(base: Context) {
         super.attachBaseContext(com.rainy.token.util.LocaleManager.wrapContext(base))
     }
@@ -45,6 +79,8 @@ class RainyTokenApplication : Application(), Configuration.Provider {
 
         // WeatherRepository 需要 application context
         CtxHolder.app = applicationContext
+
+        ensureWidgetProviderEnabled()
 
         // 调度 WorkManager 周期性刷新。
         // 先用默认间隔同步调度，保证任务一定存在；再异步读取用户设置的

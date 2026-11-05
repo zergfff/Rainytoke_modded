@@ -73,6 +73,24 @@ class WeatherRepository @Inject constructor(
                 ?: return@withContext Outcome.Fail(REASON_NO_LOCATION)
             val (lat, lon) = coordinates
 
+            // 鉴权模式与坐标先落日志：401 时能一眼看出用的是哪种凭据、ID 填的是啥
+            log(
+                context, "WEATHER_AUTH",
+                "host" to host,
+                "mode" to when {
+                    credential.usesJwt -> "jwt-signed"
+                    credential.pastedToken.isNotEmpty() -> "jwt-pasted"
+                    else -> "api-key"
+                },
+                "kid" to credential.credentialId,
+                "iss" to credential.developerId,
+                "sub" to credential.projectId,
+                "keyLen" to credential.privateKey.length,
+                "keyQueryLen" to credential.apiKey.length,
+                "lat" to String.format(Locale.US, "%.2f", lat),
+                "lon" to String.format(Locale.US, "%.2f", lon)
+            )
+
             // 鉴权头：本机签发 JWT > 粘贴的现成 JWT > 旧版 ?key=
             val bearer: String?
             val keyQuery: String
