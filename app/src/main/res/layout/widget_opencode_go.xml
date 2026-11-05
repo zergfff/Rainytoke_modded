@@ -159,8 +159,10 @@
             android:text="--" android:textColor="@color/widget_primary_text" android:textSize="15sp"
             android:textStyle="bold" android:gravity="end" />
 
-        <!-- 自绘进度条：容器画底槽，子 View 画填充（setScaleX 表达百分比）。
-             不要换回系统 ProgressBar —— HyperOS 4 宿主主题的 progressDrawable
+        <!-- 自绘进度条：容器画底槽，子 ImageView 画填充（setScaleX 表达百分比）。
+             注意：RemoteViews 只允许白名单控件，纯 View 会触发 lint RemoteViewLayout
+             且宿主可能直接 inflate 失败，所以填充层必须用 ImageView/TextView。
+             也不要换回系统 ProgressBar —— HyperOS 4 宿主主题的 progressDrawable
              不认 level，会让三行永远满格同色。 -->
         <FrameLayout android:id="@+id/row1_bar"
             android:layout_width="0dp" android:layout_height="7dp"
@@ -168,8 +170,10 @@
             android:layout_marginEnd="8dp"
             android:background="@drawable/widget_bar_track">
 
-            <View android:id="@+id/row1_bar_fill"
+            <ImageView android:id="@+id/row1_bar_fill"
                 android:layout_width="match_parent" android:layout_height="match_parent"
+                android:scaleType="fitXY"
+                android:contentDescription="@null"
                 android:background="@drawable/widget_bar_fill" />
         </FrameLayout>
 
@@ -204,8 +208,10 @@
             android:text="--" android:textColor="@color/widget_primary_text" android:textSize="15sp"
             android:textStyle="bold" android:gravity="end" />
 
-        <!-- 自绘进度条：容器画底槽，子 View 画填充（setScaleX 表达百分比）。
-             不要换回系统 ProgressBar —— HyperOS 4 宿主主题的 progressDrawable
+        <!-- 自绘进度条：容器画底槽，子 ImageView 画填充（setScaleX 表达百分比）。
+             注意：RemoteViews 只允许白名单控件，纯 View 会触发 lint RemoteViewLayout
+             且宿主可能直接 inflate 失败，所以填充层必须用 ImageView/TextView。
+             也不要换回系统 ProgressBar —— HyperOS 4 宿主主题的 progressDrawable
              不认 level，会让三行永远满格同色。 -->
         <FrameLayout android:id="@+id/row2_bar"
             android:layout_width="0dp" android:layout_height="7dp"
@@ -213,8 +219,10 @@
             android:layout_marginEnd="8dp"
             android:background="@drawable/widget_bar_track">
 
-            <View android:id="@+id/row2_bar_fill"
+            <ImageView android:id="@+id/row2_bar_fill"
                 android:layout_width="match_parent" android:layout_height="match_parent"
+                android:scaleType="fitXY"
+                android:contentDescription="@null"
                 android:background="@drawable/widget_bar_fill" />
         </FrameLayout>
 
@@ -249,8 +257,10 @@
             android:text="--" android:textColor="@color/widget_primary_text" android:textSize="15sp"
             android:textStyle="bold" android:gravity="end" />
 
-        <!-- 自绘进度条：容器画底槽，子 View 画填充（setScaleX 表达百分比）。
-             不要换回系统 ProgressBar —— HyperOS 4 宿主主题的 progressDrawable
+        <!-- 自绘进度条：容器画底槽，子 ImageView 画填充（setScaleX 表达百分比）。
+             注意：RemoteViews 只允许白名单控件，纯 View 会触发 lint RemoteViewLayout
+             且宿主可能直接 inflate 失败，所以填充层必须用 ImageView/TextView。
+             也不要换回系统 ProgressBar —— HyperOS 4 宿主主题的 progressDrawable
              不认 level，会让三行永远满格同色。 -->
         <FrameLayout android:id="@+id/row3_bar"
             android:layout_width="0dp" android:layout_height="7dp"
@@ -258,8 +268,10 @@
             android:layout_marginEnd="8dp"
             android:background="@drawable/widget_bar_track">
 
-            <View android:id="@+id/row3_bar_fill"
+            <ImageView android:id="@+id/row3_bar_fill"
                 android:layout_width="match_parent" android:layout_height="match_parent"
+                android:scaleType="fitXY"
+                android:contentDescription="@null"
                 android:background="@drawable/widget_bar_fill" />
         </FrameLayout>
 
