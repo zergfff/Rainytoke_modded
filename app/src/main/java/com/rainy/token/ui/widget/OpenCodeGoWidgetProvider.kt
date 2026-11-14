@@ -454,13 +454,56 @@ private fun populateServiceRows(
             }
             // 新增的 Coding Plan 服务（GLM / Kimi / MiMo）与 CommandCode Go 一样，
             // 都是 "*.used / *.cap / *.resetInSec" 的通用窗口格式，共用同一分支。
+            ServiceType.OPEN_DESIGN -> {
+                fun calcPct(used: Double?, cap: Double?): Int? {
+                    if (used == null || cap == null || cap <= 0) return null
+                    return ((used / cap) * 100).toInt().coerceIn(0, 100)
+                }
+                val fiveHour = calcPct(
+                    extras["fiveHour.used"]?.toDoubleOrNull(),
+                    extras["fiveHour.cap"]?.toDoubleOrNull()
+                )
+                val weekly = calcPct(
+                    extras["weekly.used"]?.toDoubleOrNull(),
+                    extras["weekly.cap"]?.toDoubleOrNull()
+                )
+                val monthly = calcPct(balance.monthlySpent, balance.totalQuota)
+                if (fiveHour == null && weekly == null && monthly == null) {
+                    // 只有余额、没有窗口（Control Key 模式或 Cookie 过期）
+                    populateOpenDesignBalanceOnly(views, context, balance, barWidthDp)
+                } else {
+                    setRowLabel(
+                        views,
+                        context.getString(R.string.window_5h_short),
+                        context.getString(R.string.window_weekly),
+                        context.getString(R.string.window_monthly)
+                    )
+                    populateRow(
+                        context, views, R.id.row1_pct, R.id.row1_bar_fill, R.id.row1_reset,
+                        pct = fiveHour,
+                        resetSec = extras["fiveHour.resetInSec"]?.toLongOrNull(),
+                        barWidthDp = barWidthDp
+                    )
+                    populateRow(
+                        context, views, R.id.row2_pct, R.id.row2_bar_fill, R.id.row2_reset,
+                        pct = weekly,
+                        resetSec = extras["weekly.resetInSec"]?.toLongOrNull(),
+                        barWidthDp = barWidthDp
+                    )
+                    populateRow(
+                        context, views, R.id.row3_pct, R.id.row3_bar_fill, R.id.row3_reset,
+                        pct = monthly,
+                        resetSec = extras["monthly.resetInSec"]?.toLongOrNull(),
+                        barWidthDp = barWidthDp
+                    )
+                }
+            }
             ServiceType.COMMANDCODE_GO,
             ServiceType.ZAI_GLM,
             ServiceType.KIMI,
             ServiceType.MIMO,
             ServiceType.MINIMAX,
-            ServiceType.ALIBABA,
-            ServiceType.OPEN_DESIGN -> {
+            ServiceType.ALIBABA -> {
                 fun calcPct(used: Double?, cap: Double?): Int? {
                     if (used == null || cap == null || cap <= 0) return null
                     return ((used / cap) * 100).toInt().coerceIn(0, 100)
@@ -633,6 +676,51 @@ private fun populateServiceRows(
         } catch (t: Throwable) {
             FileDebugLog.e(context, "BAR_FAIL", t, "row" to rowTag(fillViewId), "pct" to clamped)
         }
+    }
+
+    /**
+     * Open Design 只有余额、没有窗口时的降级显示。
+     *
+     * 三行百分比条全空看起来就是「坏了」，这里改成单行：
+     * 左标签「剩余」，数字列直接显示余额金额（列宽临时加宽，避免被省略），
+     * 进度条 = 剩余占比（能算出周期总额度时）。
+     */
+    private fun populateOpenDesignBalanceOnly(
+        views: RemoteViews,
+        context: Context,
+        balance: com.rainy.token.domain.model.ServiceBalance,
+        barWidthDp: Float
+    ) {
+        val remaining = balance.extras["monthlyRemaining"]?.toDoubleOrNull() ?: balance.amount
+        val total = balance.totalQuota?.takeIf { it > 0 }
+        val remainingPct = total
+            ?.let { ((remaining / it) * 100).toInt().coerceIn(0, 100) }
+            ?: 0
+
+        views.setViewLayoutWidth(R.id.row1_pct, 88f, TypedValue.COMPLEX_UNIT_DIP)
+        views.setTextViewText(R.id.row1_label, context.getString(R.string.widget_balance_remaining))
+        views.setTextViewText(
+            R.id.row1_pct,
+            balance.unit + String.format(Locale.US, "%.2f", remaining)
+        )
+        views.setTextViewText(R.id.row1_reset, "")
+        setBar(context, views, R.id.row1_bar_fill, remainingPct, barWidthDp)
+
+        for (id in listOf(
+            R.id.row2_label, R.id.row2_pct, R.id.row2_reset,
+            R.id.row3_label, R.id.row3_pct, R.id.row3_reset
+        )) {
+            views.setTextViewText(id, "")
+        }
+        for (barId in listOf(R.id.row2_bar_fill, R.id.row3_bar_fill)) {
+            setBar(context, views, barId, 0, barWidthDp)
+        }
+        FileDebugLog.i(
+            context, "OD_BALANCE_ONLY",
+            "remaining" to remaining,
+            "total" to (total ?: 0.0),
+            "pct" to remainingPct
+        )
     }
 
     private fun rowTag(viewId: Int): String = when (viewId) {

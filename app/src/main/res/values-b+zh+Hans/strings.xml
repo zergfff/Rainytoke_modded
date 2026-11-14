@@ -628,4 +628,5 @@
     <string name="weather_legacy">旧版 API Key / 手工粘贴 JWT（可选）</string>
     <string name="weather_legacy_hint">仅在本机无法做 Ed25519 签名时使用</string>
     <string name="weather_cred_incomplete">请填全 API Host + 凭据 ID + 开发者 ID + 项目 ID + 私钥</string>
+    <string name="widget_balance_remaining">剩余</string>
 </resources>

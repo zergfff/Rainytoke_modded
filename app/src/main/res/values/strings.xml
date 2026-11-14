@@ -635,4 +635,5 @@
     <string name="weather_legacy">Legacy API key / pasted JWT (optional)</string>
     <string name="weather_legacy_hint">Only if this ROM cannot sign Ed25519</string>
     <string name="weather_cred_incomplete">Fill in API Host + Credential ID + Developer ID + Project ID + Private key</string>
+    <string name="widget_balance_remaining">Remaining</string>
 </resources>

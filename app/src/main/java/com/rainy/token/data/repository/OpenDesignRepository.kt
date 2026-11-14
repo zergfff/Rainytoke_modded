@@ -205,6 +205,12 @@ class OpenDesignRepository @Inject constructor(
             val summary = parseBillingSummary(body)
             if (summary != null && summary.plan != null) {
                 val plan = planDisplayName(summary.plan)
+                // Control Key 也去补一次 5h/7d 窗口（失败不致命）
+                val windows = fetchWindowsWithBearer(controlKey, cookie)
+                // 周期总额度 = 已用 + 剩余（用于第三行「本月」百分比）
+                val periodTotal = summary.consumedUsd
+                    ?.let { used -> used + summary.availableUsd }
+                    ?.takeIf { it > 0 }
                 val extras = buildMap {
                     put("plan", plan)
                     put("planName", plan)
@@ -212,6 +218,13 @@ class OpenDesignRepository @Inject constructor(
                     put("authMode", "control_key")
                     summary.status?.let { put("subscriptionStatus", it) }
                     summary.interval?.let { put("billingInterval", it) }
+                    periodTotal?.let { put("monthlyTotal", it.toString()) }
+                    windows.forEach { window ->
+                        val prefix = window.extraPrefix() ?: return@forEach
+                        put("$prefix.used", window.usedPercent().toString())
+                        put("$prefix.cap", "100")
+                        window.resetInSec()?.let { put("$prefix.resetInSec", it.toString()) }
+                    }
                 }
                 return Result.success(
                     ServiceBalance(
@@ -220,6 +233,7 @@ class OpenDesignRepository @Inject constructor(
                         unit = ServiceConfigProvider.get(ServiceType.OPEN_DESIGN).displayUnit,
                         isAvailable = summary.status?.equals("active", true) ?: true,
                         monthlySpent = summary.consumedUsd,
+                        totalQuota = periodTotal,
                         nextResetAt = summary.periodEndMillis,
                         extras = extras
                     )
@@ -285,9 +299,9 @@ class OpenDesignRepository @Inject constructor(
         )
     }
 
-    /** 调 `/v1/workspaces` 取当前工作区 id。 */
-    private fun discoverWorkspaceId(cookie: String): Result<String> {
-        val body = getJson("$API_BASE/v1/workspaces", cookie, workspaceId = null)
+    /** 调 `/v1/workspaces` 取当前工作区 id（Cookie 或 Control Key 均可）。 */
+    private fun discoverWorkspaceId(cookie: String, bearer: String? = null): Result<String> {
+        val body = getJson("$API_BASE/v1/workspaces", cookie.ifBlank { null }, workspaceId = null, bearer = bearer)
             .getOrElse { return Result.failure(it) }
 
         val parsed = runCatching {
@@ -339,6 +353,23 @@ class OpenDesignRepository @Inject constructor(
             cookie = cookie,
             workspaceId = workspaceId
         ).getOrNull()?.let { parseCodingPlanUsage(it) }.orEmpty()
+
+    /**
+     * 用 Control Key（Bearer）补齐 5h/7d 窗口。
+     *
+     * 之前只有 Cookie 链路会拉 coding-plan-usage，Cookie 一过期就只剩余额、没有任何窗口，
+     * 小组件三行进度条于是全空（看起来像"进度条坏了"）。这里用同一个 Bearer 补一次：
+     * 先拿 workspaceId，再查窗口；任一步失败就返回空列表，由上层降级成「只显示余额」。
+     */
+    private fun fetchWindowsWithBearer(bearer: String, cookie: String): List<CodingPlanWindow> {
+        val workspaceId = discoverWorkspaceId(cookie, bearer = bearer).getOrNull() ?: return emptyList()
+        return getJson(
+            url = "$API_BASE/v1/workspaces/$workspaceId/billing/coding-plan-usage",
+            cookie = cookie.ifBlank { null },
+            workspaceId = workspaceId,
+            bearer = bearer
+        ).getOrNull()?.let { parseCodingPlanUsage(it) }.orEmpty()
+    }
 
     /** 钱包余额（Cookie 或 Control Key 均可）。 */
     private fun fetchWalletBalance(cookie: String): Double? =
