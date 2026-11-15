@@ -160,8 +160,9 @@ class WeatherRepository @Inject constructor(
                     else -> "key"
                 }
             )
-            // 3. 空气质量 v7：失败不影响天气本身，AQI 留空即可
-            val airQuality = fetchAirQuality(host, cityId, keyQuery, bearer, context)
+            // 3. 空气质量 v1：失败不影响天气本身，AQI 留空即可
+            //    注意 /v7/air/now 已于 2026-06-01 停服，必须走 /airquality/v1/current
+            val airQuality = fetchAirQuality(host, lat, lon, keyQuery, bearer, context)
 
             Outcome.Ok(
                 Snapshot(
@@ -186,18 +187,21 @@ class WeatherRepository @Inject constructor(
      */
     private fun fetchAirQuality(
         host: String,
-        cityId: String,
+        lat: Double,
+        lon: Double,
         keyQuery: String,
         bearer: String?,
         context: Context?
     ): Pair<String, String> {
-        val result = httpGet(
-            "https://" + host + "/v7/air/now?location=" + cityId + "&lang=zh" + keyQuery,
-            bearer
-        )
+        // 新版空气质量 API（/v7/air/now 已于 2026-06-01 停服）：
+        // GET /airquality/v1/current/{lat}/{lon}?lang=zh
+        val url = "https://" + host + "/airquality/v1/current/" +
+            String.format(Locale.US, "%.2f", lat) + "/" +
+            String.format(Locale.US, "%.2f", lon) + "?lang=zh" + keyQuery
+        val result = httpGet(url, bearer)
         val body = result.second
         if (result.first != HTTP_OK || body == null) {
-            // 常见：403 = 空气质量 API 未订阅 / 401 = 鉴权；widget 只是隐藏 AQI，不影响天气
+            // 403 常见于「空气质量 API 未订阅」或额度不足；401 是鉴权；都不影响天气
             context?.let {
                 FileDebugLog.w(
                     it, "WEATHER_AQI_FAIL",
@@ -207,11 +211,31 @@ class WeatherRepository @Inject constructor(
             }
             return "" to ""
         }
-        val air = runCatching { JSONObject(body).optJSONObject("now") }.getOrNull() ?: return "" to ""
-        val aqi = air.optString("aqi", "").trim()
-        val category = air.optString("category", "").trim()
+        val indexes = runCatching { JSONObject(body).optJSONArray("indexes") }.getOrNull()
+            ?: return "" to ""
+        var chosen: JSONObject? = null
+        for (i in 0 until indexes.length()) {
+            val item = indexes.optJSONObject(i) ?: continue
+            // 中国大陆优先用国标 cn-mee；其他地区用第一个
+            if (item.optString("code") == "cn-mee") {
+                chosen = item
+                break
+            }
+            if (chosen == null) chosen = item
+        }
+        val index = chosen ?: return "" to ""
+        val display = index.optString("aqiDisplay", "").trim()
+        val numeric = if (index.has("aqi") && !index.isNull("aqi")) {
+            index.optInt("aqi", -1).toString()
+        } else ""
+        val aqi = display.ifEmpty { numeric }
+        val category = index.optString("category", "").trim()
         context?.let {
-            FileDebugLog.i(it, "WEATHER_AQI_OK", "aqi" to aqi, "cat" to category)
+            FileDebugLog.i(
+                it, "WEATHER_AQI_OK",
+                "aqi" to aqi, "cat" to category,
+                "code" to index.optString("code", "")
+            )
         }
         return aqi to category
     }

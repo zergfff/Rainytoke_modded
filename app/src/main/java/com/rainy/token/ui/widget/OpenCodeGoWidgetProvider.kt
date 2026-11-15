@@ -364,7 +364,7 @@ private fun applyFontScale(
     // 天气图标与温度文字等高：sp 会随系统字体缩放变化，dp 不会，
     // 所以图标尺寸跟随天气文字的 sp 值一起缩放，避免两者高度脱节。
     // AQI 跟随天气字号一起缩放，但基准固定 14sp（不继承 WEATHER 的 25sp）
-    views.setTextViewTextSize(R.id.widget_aqi, TypedValue.COMPLEX_UNIT_SP, 14f * scale)
+    views.setTextViewTextSize(R.id.widget_aqi, TypedValue.COMPLEX_UNIT_SP, 12f * scale)
 
     val weatherIconSize = (styles[WidgetElement.WEATHER]?.sizeSp ?: 25f) * scale
     views.setViewLayoutWidth(R.id.widget_weather_icon, weatherIconSize, TypedValue.COMPLEX_UNIT_DIP)
