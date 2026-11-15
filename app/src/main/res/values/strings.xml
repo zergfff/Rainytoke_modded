@@ -646,4 +646,7 @@
     <string name="credential_import_root_fail_browser">No Firefox-family browser data found (IceRaven package not recognised?)</string>
     <string name="credential_import_root_fail_db">Browser found but cookies.sqlite is missing (open Open Design in the browser once)</string>
     <string name="credential_import_root_fail_cookie">Database readable but no Open Design cookie inside (browser session may have expired)</string>
+    <string name="action_export_log">Export</string>
+    <string name="action_export_log_done">Log exported</string>
+    <string name="webview_login_saved">Saved %1$d cookies</string>
 </resources>

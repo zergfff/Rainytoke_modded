@@ -93,6 +93,52 @@ object FileDebugLog {
         return if (all.size <= limit) all else all.subList(all.size - limit, all.size)
     }
 
+    /**
+     * 导出：把文件日志 + APP 内存日志拼成一份 txt，写到 cacheDir/export/。
+     * 返回文件供 FileProvider 共享；调用方负责在 IO 线程调它。
+     */
+    fun exportBundle(context: Context, memoryLines: List<String>): File {
+        val dir = File(context.cacheDir, "export")
+        if (!dir.exists()) dir.mkdirs()
+        val stamp = SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(Date())
+        val out = File(dir, "rainytoken-log-" + stamp + ".txt")
+        out.bufferedWriter(Charsets.UTF_8).use { writer ->
+            writer.write("RainyToken debug log")
+            writer.write("\n")
+            writer.write("exported: " + Date().toString())
+            writer.write("\n")
+            writer.write(
+                "device: " + Build.MANUFACTURER + " " + Build.MODEL +
+                    " / Android " + Build.VERSION.RELEASE + " (sdk " + Build.VERSION.SDK_INT + ")"
+            )
+            writer.write("\n")
+            writer.write(
+                "build: " + try {
+                    val pi = context.packageManager.getPackageInfo(context.packageName, 0)
+                    pi.versionName + " (" + (if (Build.VERSION.SDK_INT >= 28) pi.longVersionCode else pi.versionCode) + ")"
+                } catch (_: Throwable) {
+                    "unknown"
+                }
+            )
+            writer.write("\n")
+
+            writer.write("\n===== widget / background file log (oldest -> newest) =====")
+            writer.write("\n")
+            tail(context, limit = 2000).forEach { line ->
+                writer.write(line)
+                writer.write("\n")
+            }
+
+            writer.write("\n===== in-app log =====")
+            writer.write("\n")
+            memoryLines.forEach { line ->
+                writer.write(line)
+                writer.write("\n")
+            }
+        }
+        return out
+    }
+
     fun clear(context: Context) {
         synchronized(lock) {
             try {

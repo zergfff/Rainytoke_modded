@@ -47,7 +47,8 @@ class CredentialEditViewModel @Inject constructor(
     private var serviceType: ServiceType? = null
 
     fun bind(service: ServiceType) {
-        if (serviceType == service) return
+        // 不能早退：从 WebView 登录返回时 service 没变，但凭据已经被登录流程写进去了，
+        // 必须重新 load() 才能把 Cookie 回填到输入框（否则用户看着像"登录了却没填"）。
         serviceType = service
         val config = ServiceConfigProvider.get(service)
         val isApiKey = config.method == FetchMethod.REST_API

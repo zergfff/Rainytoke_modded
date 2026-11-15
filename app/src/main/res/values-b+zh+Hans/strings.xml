@@ -639,4 +639,7 @@
     <string name="credential_import_root_fail_browser">没找到 Firefox 系浏览器的数据目录（IceRaven 包名是否被识别？）</string>
     <string name="credential_import_root_fail_db">找到浏览器目录但缺 cookies.sqlite（先在浏览器里打开一次 Open Design）</string>
     <string name="credential_import_root_fail_cookie">数据库能读，但里面没有 Open Design 的 cookie（浏览器登录可能已过期）</string>
+    <string name="action_export_log">导出</string>
+    <string name="action_export_log_done">日志已导出，选一个方式保存/发送</string>
+    <string name="webview_login_saved">已保存 %1$d 条 Cookie</string>
 </resources>

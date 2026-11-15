@@ -3,6 +3,8 @@ package com.rainy.token.ui.components
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.content.Intent
+import androidx.core.content.FileProvider
 import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -35,6 +37,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -51,6 +54,7 @@ import com.rainy.token.data.debug.FileDebugLog
 import com.rainy.token.ui.theme.InkMuted
 import com.rainy.token.ui.theme.StrawberryPink
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -58,6 +62,7 @@ import kotlinx.coroutines.withContext
 fun DebugLogScreen(onBack: () -> Unit) {
     val entries by DebugLog.entries.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     // 小组件日志在文件里（跨进程），进页面时读一次尾部
     var widgetLines by remember { mutableStateOf<List<String>>(emptyList()) }
     LaunchedEffect(Unit) {
@@ -88,6 +93,47 @@ fun DebugLogScreen(onBack: () -> Unit) {
                     // 一键复制：小组件文件日志 + 内存日志，直接粘贴给开发者
                     TextButton(onClick = { copyAllLogs(context, widgetLines, entries) }) {
                         Text(stringResource(R.string.action_copy), color = StrawberryPink)
+                    }
+                    // 导出成文件再分享（微信/邮件/文件管理器都行），比整段复制稳
+                    TextButton(onClick = {
+                        scope.launch {
+                            val memoryLines = entries.map { entry ->
+                                val stamp = java.text.SimpleDateFormat(
+                                    "MM-dd HH:mm:ss.SSS",
+                                    java.util.Locale.US
+                                ).format(java.util.Date(entry.timestamp))
+                                stamp + " " + entry.level.label + " " + entry.tag + " " + entry.message
+                            }
+                            val file = withContext(Dispatchers.IO) {
+                                FileDebugLog.exportBundle(context, memoryLines)
+                            }
+                            val uri = FileProvider.getUriForFile(
+                                context,
+                                context.packageName + ".fileprovider",
+                                file
+                            )
+                            val intent = Intent(Intent.ACTION_SEND).apply {
+                                type = "text/plain"
+                                putExtra(Intent.EXTRA_STREAM, uri)
+                                putExtra(Intent.EXTRA_SUBJECT, "RainyToken debug log")
+                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                            }
+                            runCatching {
+                                context.startActivity(
+                                    Intent.createChooser(
+                                        intent,
+                                        context.getString(R.string.action_export_log)
+                                    )
+                                )
+                            }
+                            Toast.makeText(
+                                context,
+                                context.getString(R.string.action_export_log_done),
+                                Toast.LENGTH_SHORT
+                            ).show()
+                        }
+                    }) {
+                        Text(stringResource(R.string.action_export_log), color = StrawberryPink)
                     }
                     TextButton(onClick = {
                         DebugLog.clear()

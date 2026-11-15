@@ -10,18 +10,19 @@ import java.util.concurrent.TimeUnit
  * 从本机浏览器的 Cookie 数据库直接取 Cookie —— **需要 root**。
  *
  * Android 没有跨 App 读 Cookie 的 API：Firefox / IceRaven 的 Cookie 在
- * `/data/data/<pkg>/files/mozilla/<profile>/cookies.sqlite`，普通权限读不到。
+ * `<dataDir>/files/mozilla/<profile>/cookies.sqlite`，普通权限读不到。
  * 已 root 时用 `su` 把库（含 -wal / -shm）拷到应用缓存，只读查询 `moz_cookies`，
  * 查完立即删除，不修改浏览器数据。
  *
- * 失败原因细分成「su 不可用 / 没装浏览器 / 没找到库 / 库里没有目标 cookie」，
- * 每一步的 su 输出都写进 FileDebugLog，方便直接定位。
+ * 包名发现优先用 `pm list packages`（不依赖 /data/data 能否 ls），
+ * 数据目录三处都探：/data/data、/data/user/0、/data/user_de/0。
  */
 object BrowserCookieExtractor {
 
-    /** 已知 Firefox 系（含 fork）包名；命中即用，避免遍历整个 /data/data */
+    /** 已知 Firefox 系（含 fork）包名；pm 拿不到时用它们兜底 */
     private val KNOWN_PACKAGES = listOf(
         "org.iceraven.firefox",
+        "org.iceraven.firefox.beta",
         "org.mozilla.firefox",
         "org.mozilla.firefox_beta",
         "org.mozilla.fenix",
@@ -33,7 +34,7 @@ object BrowserCookieExtractor {
     )
 
     private val BROWSER_HINTS = listOf(
-        "iceraven", "firefox", "fennec", "mull", "ironfox", "torbrowser"
+        "iceraven", "firefox", "fennec", "mull", "ironfox", "browser"
     )
 
     data class Extraction(
@@ -61,73 +62,75 @@ object BrowserCookieExtractor {
 
         val packages = findBrowserPackages(context)
         if (packages.isEmpty()) {
-            return Extraction(error = Error.NO_BROWSER, detail = "候选包与 /data/data 都没命中")
+            return Extraction(error = Error.NO_BROWSER, detail = "pm list 与已知包名都没命中")
         }
 
         var lastError = Error.NO_DATABASE
         var lastDetail = ""
+
         for (pkg in packages) {
-            val mozillaDir = "/data/data/" + pkg + "/files/mozilla"
-            val profiles = runSu("ls -1 '" + mozillaDir + "' 2>/dev/null")
-                ?.lineSequence()?.map { it.trim() }?.filter { it.isNotEmpty() }?.toList()
-                .orEmpty()
-            if (profiles.isEmpty()) {
-                lastDetail = pkg + ": 没有 " + mozillaDir
-                continue
-            }
+            for (dataRoot in dataDirs(pkg)) {
+                val mozillaDir = dataRoot + "/files/mozilla"
+                val profiles = listDir(mozillaDir)
+                if (profiles.isNullOrEmpty()) continue
 
-            for (profile in profiles) {
-                val src = mozillaDir + "/" + profile + "/cookies.sqlite"
-                if (runSu("test -f '" + src + "' && echo yes")?.trim() != "yes") continue
+                for (profile in profiles) {
+                    val src = mozillaDir + "/" + profile + "/cookies.sqlite"
+                    if (runSu("test -f '" + src + "' && echo yes")?.trim() != "yes") continue
 
-                val tag = pkg + "/" + profile
-                val tmp = File(
-                    context.cacheDir,
-                    "cookies-" + pkg.hashCode() + "-" + profile.hashCode() + ".sqlite"
-                )
-                tmp.delete()
-
-                // 连同 -wal / -shm 一起拷：浏览器可能还没 checkpoint，少了 WAL 会缺最新记录
-                val copy = runSu(
-                    "cp -f '" + src + "' '" + tmp.absolutePath + "' 2>/dev/null; " +
-                        "[ -f '" + src + "-wal' ] && cp -f '" + src + "-wal' '" + tmp.absolutePath + "-wal' 2>/dev/null; " +
-                        "[ -f '" + src + "-shm' ] && cp -f '" + src + "-shm' '" + tmp.absolutePath + "-shm' 2>/dev/null; " +
-                        "chmod 644 '" + tmp.absolutePath + "'* && echo ok"
-                )?.trim()
-                if (copy != "ok") {
-                    lastError = Error.COPY_FAILED
-                    lastDetail = tag + ": 拷贝失败 (" + (copy ?: "null") + ")"
-                    FileDebugLog.w(
-                        context, "COOKIE_ROOT",
-                        "step" to "copy", "tag" to tag, "out" to (copy ?: "null")
+                    val tag = pkg + "/" + profile
+                    val tmp = File(
+                        context.cacheDir,
+                        "cookies-" + pkg.hashCode() + "-" + profile.hashCode() + ".sqlite"
                     )
-                    continue
-                }
+                    tmp.delete()
 
-                val cookies = runCatching { readCookies(tmp, domainSuffix) }.getOrElse { t ->
-                    FileDebugLog.e(
-                        context, "COOKIE_ROOT_DB", t,
-                        "err" to (t.javaClass.simpleName + ": " + t.message)
+                    // 连同 -wal / -shm 一起拷：WAL 模式下少这两个文件会读到旧快照甚至空表
+                    val copy = runSu(
+                        "cp -f '" + src + "' '" + tmp.absolutePath + "' 2>/dev/null; " +
+                            "[ -f '" + src + "-wal' ] && cp -f '" + src + "-wal' '" +
+                            tmp.absolutePath + "-wal' 2>/dev/null; " +
+                            "[ -f '" + src + "-shm' ] && cp -f '" + src + "-shm' '" +
+                            tmp.absolutePath + "-shm' 2>/dev/null; " +
+                            "chmod 644 '" + tmp.absolutePath + "'* && echo ok"
                     )
-                    emptyList()
-                }
-                listOf(
-                    tmp,
-                    File(tmp.absolutePath + "-wal"),
-                    File(tmp.absolutePath + "-shm")
-                ).forEach { it.delete() }
+                    if (copy?.trim() != "ok") {
+                        lastError = Error.COPY_FAILED
+                        lastDetail = tag + " @" + dataRoot + ": 拷贝失败 (" + (copy ?: "null") + ")"
+                        FileDebugLog.w(
+                            context, "COOKIE_ROOT",
+                            "step" to "copy", "tag" to tag, "out" to (copy ?: "null")
+                        )
+                        continue
+                    }
 
-                if (cookies.isNotEmpty()) {
-                    FileDebugLog.i(
-                        context, "COOKIE_ROOT_OK",
-                        "pkg" to pkg, "profile" to profile, "count" to cookies.size
-                    )
-                    return Extraction(cookies, pkg, profile)
+                    val cookies = runCatching { readCookies(tmp, domainSuffix) }.getOrElse { t ->
+                        FileDebugLog.e(
+                            context, "COOKIE_ROOT_DB", t,
+                            "tag" to tag, "err" to (t.javaClass.simpleName + ": " + t.message)
+                        )
+                        emptyList()
+                    }
+                    listOf(
+                        tmp,
+                        File(tmp.absolutePath + "-wal"),
+                        File(tmp.absolutePath + "-shm")
+                    ).forEach { it.delete() }
+
+                    if (cookies.isNotEmpty()) {
+                        FileDebugLog.i(
+                            context, "COOKIE_ROOT_OK",
+                            "pkg" to pkg, "profile" to profile,
+                            "root" to dataRoot, "count" to cookies.size
+                        )
+                        return Extraction(cookies, pkg, profile)
+                    }
+                    lastError = Error.NO_COOKIE
+                    lastDetail = tag + " @" + dataRoot + ": 库可读，但没有 " + domainSuffix + " 的 cookie"
                 }
-                lastError = Error.NO_COOKIE
-                lastDetail = tag + ": 库可读，但没有 " + domainSuffix + " 的 cookie"
             }
         }
+
         FileDebugLog.w(context, "COOKIE_ROOT_FAIL", "error" to lastError, "detail" to lastDetail)
         return Extraction(error = lastError, detail = lastDetail)
     }
@@ -141,19 +144,45 @@ object BrowserCookieExtractor {
 
     private fun findBrowserPackages(context: Context): List<String> {
         val hits = LinkedHashSet<String>()
+
+        // 1) 首选 pm list packages：由 PackageManager 回答"装了谁"，
+        //    不依赖 /data/data 能否 ls（MIUI 上 ls /data/data 常被 SELinux 拦掉）。
+        val pmOut = runSu("pm list packages 2>/dev/null").orEmpty()
+        val allPackages = pmOut.lineSequence()
+            .map { it.trim().removePrefix("package:") }
+            .filter { it.isNotEmpty() }
+            .toList()
+        allPackages
+            .filter { pkg -> BROWSER_HINTS.any { pkg.contains(it, ignoreCase = true) } }
+            .forEach { hits.add(it) }
+
+        // 2) 已知包名再兜一层（pm 被拦时的退路）
         for (pkg in KNOWN_PACKAGES) {
-            if (runSu("test -d '/data/data/" + pkg + "' && echo yes")?.trim() == "yes") hits.add(pkg)
+            val exists = dataDirs(pkg).any { dir ->
+                runSu("test -d '" + dir + "' && echo yes")?.trim() == "yes"
+            }
+            if (exists) hits.add(pkg)
         }
-        if (hits.isEmpty()) {
-            val listing = runSu("ls /data/data 2>/dev/null").orEmpty()
-            listing.lineSequence()
-                .map { it.trim() }
-                .filter { it.isNotEmpty() }
-                .filter { pkg -> BROWSER_HINTS.any { pkg.contains(it, ignoreCase = true) } }
-                .forEach { hits.add(it) }
-        }
-        FileDebugLog.i(context, "COOKIE_ROOT_PKGS", "found" to hits.joinToString(","))
+
+        FileDebugLog.i(
+            context, "COOKIE_ROOT_PKGS",
+            "pmCount" to allPackages.size,
+            "found" to hits.joinToString(",")
+        )
         return hits.toList()
+    }
+
+    /** 同一包可能落在三个位置：符号链接 /data/data、/data/user/0、DE 存储 */
+    private fun dataDirs(pkg: String): List<String> = listOf(
+        "/data/data/" + pkg,
+        "/data/user/0/" + pkg,
+        "/data/user_de/0/" + pkg
+    )
+
+    private fun listDir(dir: String): List<String>? {
+        val out = runSu("ls -1 '" + dir + "' 2>/dev/null") ?: return null
+        val entries = out.lineSequence().map { it.trim() }.filter { it.isNotEmpty() }.toList()
+        return entries.ifEmpty { null }
     }
 
     private fun readCookies(dbFile: File, domainSuffix: String): List<CookieFileImport.ImportedCookie> {

@@ -1,6 +1,7 @@
 package com.rainy.token.ui.webview
 
 import android.view.ViewGroup
+import android.widget.Toast
 import android.webkit.CookieManager
 import android.webkit.WebChromeClient
 import android.webkit.WebView
@@ -53,10 +54,18 @@ fun WebViewLoginScreen(
 ) {
     LaunchedEffect(service) { viewModel.bind(service) }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val context = androidx.compose.ui.platform.LocalContext.current
 
     // 登录成功自动回调
     LaunchedEffect(uiState.loginSucceeded) {
         if (uiState.loginSucceeded) {
+            // 明确回执：否则用户只看到页面自动关掉，以为"没填 cookie"
+            val count = uiState.savedSession?.cookies?.size ?: 0
+            Toast.makeText(
+                context,
+                context.getString(R.string.webview_login_saved, count),
+                Toast.LENGTH_LONG
+            ).show()
             onLoginSucceeded(service)
         }
     }
