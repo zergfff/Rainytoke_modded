@@ -106,7 +106,7 @@ object BrowserCookieExtractor {
 
                 val cookies = runCatching { readCookies(tmp, domainSuffix) }.getOrElse { t ->
                     FileDebugLog.e(
-                        context, "COOKIE_ROOT_DB",
+                        context, "COOKIE_ROOT_DB", t,
                         "err" to (t.javaClass.simpleName + ": " + t.message)
                     )
                     emptyList()
