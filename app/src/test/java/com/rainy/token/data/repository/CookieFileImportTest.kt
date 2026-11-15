@@ -21,8 +21,7 @@ class CookieFileImportTest {
         "# a normal comment line",
         "broken line without tabs",
         ".open-design.ai	TRUE	/	TRUE	1790000500	session_token	ccc333"
-    ).joinToString("
-")
+    ).joinToString("\n")
 
     @Test
     fun `keeps only cookies of the target domain`() {
