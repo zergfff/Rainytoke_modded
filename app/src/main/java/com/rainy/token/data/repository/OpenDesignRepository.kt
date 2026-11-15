@@ -381,17 +381,27 @@ class OpenDesignRepository @Inject constructor(
      */
     private fun pickWorkingCookie(rawCookie: String): String {
         val candidates = cookieVariants(rawCookie)
-        for (candidate in candidates) {
+        // 已经确认过可用写法：直接用，不再每次探测（省掉一轮 RTT，界面反应更快）
+        val cached = cachedCookieIndex
+        if (cached != null && cached < candidates.size) return candidates[cached]
+        for ((index, candidate) in candidates.withIndex()) {
             val status = probeStatus(candidate)
             DebugLog.i(
                 TAG,
                 "cookie 变体探测 -> HTTP " + status + "（" + candidate.length + " 字符，" +
                     cookieNames(candidate) + "）"
             )
-            if (status == 200) return candidate
+            if (status == 200) {
+                cachedCookieIndex = index
+                return candidate
+            }
         }
         return candidates.first()
     }
+
+    /** 上次探测成功的写法下标；进程内复用，避免每次刷新都探三轮 */
+    @Volatile
+    private var cachedCookieIndex: Int? = null
 
     /** 原样 → 只留 better-auth 会话 → 去掉 __Secure-/__Host- 前缀 */
     private fun cookieVariants(rawCookie: String): List<String> {

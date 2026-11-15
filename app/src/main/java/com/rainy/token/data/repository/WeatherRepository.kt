@@ -161,7 +161,7 @@ class WeatherRepository @Inject constructor(
                 }
             )
             // 3. 空气质量 v7：失败不影响天气本身，AQI 留空即可
-            val airQuality = fetchAirQuality(host, cityId, keyQuery, bearer)
+            val airQuality = fetchAirQuality(host, cityId, keyQuery, bearer, context)
 
             Outcome.Ok(
                 Snapshot(
@@ -188,13 +188,32 @@ class WeatherRepository @Inject constructor(
         host: String,
         cityId: String,
         keyQuery: String,
-        bearer: String?
+        bearer: String?,
+        context: Context?
     ): Pair<String, String> {
-        val result = httpGet("https://" + host + "/v7/air/now?location=" + cityId + "&lang=zh" + keyQuery, bearer)
+        val result = httpGet(
+            "https://" + host + "/v7/air/now?location=" + cityId + "&lang=zh" + keyQuery,
+            bearer
+        )
         val body = result.second
-        if (result.first != HTTP_OK || body == null) return "" to ""
+        if (result.first != HTTP_OK || body == null) {
+            // 常见：403 = 空气质量 API 未订阅 / 401 = 鉴权；widget 只是隐藏 AQI，不影响天气
+            context?.let {
+                FileDebugLog.w(
+                    it, "WEATHER_AQI_FAIL",
+                    "http" to result.first,
+                    "body" to body?.take(180)
+                )
+            }
+            return "" to ""
+        }
         val air = runCatching { JSONObject(body).optJSONObject("now") }.getOrNull() ?: return "" to ""
-        return air.optString("aqi", "").trim() to air.optString("category", "").trim()
+        val aqi = air.optString("aqi", "").trim()
+        val category = air.optString("category", "").trim()
+        context?.let {
+            FileDebugLog.i(it, "WEATHER_AQI_OK", "aqi" to aqi, "cat" to category)
+        }
+        return aqi to category
     }
 
     /** 返回 (HTTP 状态码, 响应体)。失败也把 body 带回来，里面是和风的错误码。 */
