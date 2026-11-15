@@ -408,16 +408,26 @@ class CredentialEditViewModel @Inject constructor(
     fun importFromBrowserRoot(context: android.content.Context) {
         val type = serviceType ?: return
         viewModelScope.launch {
-            val result = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                BrowserCookieExtractor.extract("open-design.ai", context.cacheDir)
+            val extraction = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                BrowserCookieExtractor.extract(context, "open-design.ai")
             }
-            if (result == null || result.cookies.isEmpty()) {
-                _uiState.update {
-                    it.copy(message = UiText.Resource(R.string.credential_import_root_fail))
+            if (!extraction.ok) {
+                val reason = when (extraction.error) {
+                    BrowserCookieExtractor.Error.SU_UNAVAILABLE ->
+                        R.string.credential_import_root_fail_su
+                    BrowserCookieExtractor.Error.NO_BROWSER ->
+                        R.string.credential_import_root_fail_browser
+                    BrowserCookieExtractor.Error.NO_DATABASE,
+                    BrowserCookieExtractor.Error.COPY_FAILED ->
+                        R.string.credential_import_root_fail_db
+                    BrowserCookieExtractor.Error.NO_COOKIE ->
+                        R.string.credential_import_root_fail_cookie
+                    else -> R.string.credential_import_root_fail
                 }
+                _uiState.update { it.copy(message = UiText.Resource(reason)) }
                 return@launch
             }
-            saveImportedCookies(type, result.cookies, R.string.credential_import_cookies_ok)
+            saveImportedCookies(type, extraction.cookies, R.string.credential_import_cookies_ok)
         }
     }
 

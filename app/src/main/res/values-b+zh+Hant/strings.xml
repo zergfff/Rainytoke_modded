@@ -635,4 +635,8 @@
     <string name="credential_import_cookies_fail">檔案裡沒有 Open Design 的 Cookie（請匯出包含 open-design.ai 的 cookies.txt）</string>
     <string name="credential_import_browser_root">從瀏覽器直讀（root）</string>
     <string name="credential_import_root_fail">讀取失敗：請確認已給本 APP 授予 root 權限，且瀏覽器裡已登入 Open Design</string>
+    <string name="credential_import_root_fail_su">拿不到 root：請在 Magisk/KernelSU 裡把本 APP 設為允許</string>
+    <string name="credential_import_root_fail_browser">沒找到 Firefox 系瀏覽器的資料目錄（IceRaven 包名是否被識別？）</string>
+    <string name="credential_import_root_fail_db">找到瀏覽器目錄但缺 cookies.sqlite（先在瀏覽器裡開一次 Open Design）</string>
+    <string name="credential_import_root_fail_cookie">資料庫能讀，但裡面沒有 Open Design 的 cookie（瀏覽器登入可能已過期）</string>
 </resources>

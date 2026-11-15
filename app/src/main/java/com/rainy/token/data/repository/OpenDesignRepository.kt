@@ -111,8 +111,12 @@ class OpenDesignRepository @Inject constructor(
      */
     private suspend fun fetchWithCookie(
         credential: Credential.SessionCredential,
-        cookie: String
+        rawCookie: String
     ): Result<ServiceBalance> {
+        // 从浏览器抠出来的 Cookie 常混着统计/多域字段，写法也不统一
+        // （__Secure-better-auth.session_token / better-auth.session_token）。
+        // 先用最轻的接口探一次，挑第一个真正 200 的组合，避免"看着已登录却 401/403"。
+        val cookie = pickWorkingCookie(rawCookie)
         val workspaceId = credential.workspaceId?.trim().orEmpty().ifBlank {
             discoverWorkspaceId(cookie).getOrElse { return Result.failure(it) }
         }
@@ -369,6 +373,65 @@ class OpenDesignRepository @Inject constructor(
             workspaceId = workspaceId,
             bearer = bearer
         ).getOrNull()?.let { parseCodingPlanUsage(it) }.orEmpty()
+    }
+
+    /**
+     * 依次试几种 Cookie 写法，返回第一个探测到 200 的；全失败则原样返回第一个，
+     * 让后续请求按原来的错误路径报出来（并留下日志）。
+     */
+    private fun pickWorkingCookie(rawCookie: String): String {
+        val candidates = cookieVariants(rawCookie)
+        for (candidate in candidates) {
+            val status = probeStatus(candidate)
+            DebugLog.i(
+                TAG,
+                "cookie 变体探测 -> HTTP " + status + "（" + candidate.length + " 字符，" +
+                    cookieNames(candidate) + "）"
+            )
+            if (status == 200) return candidate
+        }
+        return candidates.first()
+    }
+
+    /** 原样 → 只留 better-auth 会话 → 去掉 __Secure-/__Host- 前缀 */
+    private fun cookieVariants(rawCookie: String): List<String> {
+        val pairs = rawCookie.split(";").map { it.trim() }.filter { it.contains("=") }
+        val variants = LinkedHashSet<String>()
+        if (rawCookie.isNotBlank()) variants.add(rawCookie)
+
+        val secureOnly = pairs.filter {
+            it.startsWith("__Secure-", ignoreCase = true) || it.startsWith("__Host-", ignoreCase = true)
+        }
+        if (secureOnly.isNotEmpty()) variants.add(secureOnly.joinToString("; "))
+
+        val stripped = pairs
+            .map { it.removePrefix("__Secure-").removePrefix("__Host-") }
+            .filter { it.startsWith("better-auth", ignoreCase = true) || it.contains("session", ignoreCase = true) }
+        if (stripped.isNotEmpty()) variants.add(stripped.joinToString("; "))
+
+        return variants.toList().ifEmpty { listOf(rawCookie) }
+    }
+
+    /** 只打印 cookie 名字，绝不打印值 */
+    private fun cookieNames(cookie: String): String =
+        cookie.split(";").mapNotNull { part ->
+            val name = part.substringBefore("=").trim()
+            name.ifBlank { null }
+        }.joinToString(",")
+
+    private fun probeStatus(cookie: String): Int = try {
+        val request = Request.Builder()
+            .url("$API_BASE/v1/billing/summary?fresh=true")
+            .header("User-Agent", DESKTOP_UA)
+            .header("Accept", "application/json")
+            .header("Origin", WEB_ORIGIN)
+            .header("Referer", "$WEB_ORIGIN/cloud/dashboard")
+            .header("Cookie", cookie)
+            .get()
+            .build()
+        okHttpClient.newCall(request).execute().use { it.code }
+    } catch (_: Throwable) {
+        -1
     }
 
     /** 钱包余额（Cookie 或 Control Key 均可）。 */

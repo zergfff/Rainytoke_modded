@@ -642,4 +642,8 @@
     <string name="credential_import_cookies_fail">No Open Design cookie found in that file (export cookies.txt including open-design.ai)</string>
     <string name="credential_import_browser_root">Read browser cookies (root)</string>
     <string name="credential_import_root_fail">Read failed: grant root to this app and make sure you are logged in to Open Design in the browser</string>
+    <string name="credential_import_root_fail_su">No root: grant root to this app (Magisk should show it as allowed)</string>
+    <string name="credential_import_root_fail_browser">No Firefox-family browser data found (IceRaven package not recognised?)</string>
+    <string name="credential_import_root_fail_db">Browser found but cookies.sqlite is missing (open Open Design in the browser once)</string>
+    <string name="credential_import_root_fail_cookie">Database readable but no Open Design cookie inside (browser session may have expired)</string>
 </resources>

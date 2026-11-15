@@ -1,5 +1,6 @@
 package com.rainy.token.ui.webview
 
+import android.webkit.CookieManager
 import androidx.lifecycle.ViewModel
 import com.rainy.token.R
 import com.rainy.token.data.repository.WebViewSessionSaver
@@ -47,11 +48,59 @@ class WebViewLoginViewModel @Inject constructor(
     fun onPageFinished(url: String) {
         val current = _uiState.value
         if (current.loginSucceeded) return
-        if (looksLikeLoggedInPage(url)) {
-            saveSession(url)
-        } else {
-            _uiState.update { it.copy(pendingManualConfirm = true) }
+        val service = current.service ?: return
+
+        // 第三方 OAuth（GitHub / Google / Microsoft…）只是中转页，绝不能当成登录完成，
+        // 否则一跳转 GitHub 就被判成功、直接退登录界面 —— 这正是"还没输完密码就退出"的原因。
+        if (isThirdPartyAuthUrl(url)) {
+            _uiState.update { it.copy(pendingManualConfirm = false) }
+            return
         }
+        if (!looksLikeLoggedInPage(service, url)) {
+            _uiState.update { it.copy(pendingManualConfirm = false) }
+            return
+        }
+        // URL 回到目标站还不够，必须真的拿到会话 Cookie 才算成功
+        if (!hasSessionCookie(service)) {
+            _uiState.update { it.copy(pendingManualConfirm = true) }
+            return
+        }
+        saveSession(url)
+    }
+
+    /** 第三方登录中转域 */
+    private fun isThirdPartyAuthUrl(url: String): Boolean {
+        val u = url.lowercase()
+        return listOf(
+            "github.com", "google.com", "accounts.google", "appleid.apple",
+            "microsoftonline.com", "microsoft.com", "okta.com", "auth0.com"
+        ).any { u.contains(it) }
+    }
+
+    /** 只认「回到目标站且不在登录路径」 */
+    private fun looksLikeLoggedInPage(service: ServiceType, url: String): Boolean {
+        val u = url.lowercase()
+        val loginPaths = listOf("/auth", "/login", "/signin", "/signup", "/oauth")
+        return when (service) {
+            ServiceType.OPEN_DESIGN -> u.contains("open-design.ai") && loginPaths.none { u.contains(it) }
+            else -> loginPaths.none { u.contains(it) }
+        }
+    }
+
+    /** Cookie 里必须出现会话类字段，避免被统计 cookie 误判成功 */
+    private fun hasSessionCookie(service: ServiceType): Boolean {
+        val urls = when (service) {
+            ServiceType.OPEN_DESIGN -> listOf(
+                "https://open-design.ai",
+                "https://amr-api.open-design.ai"
+            )
+            else -> listOf(_uiState.value.loginUrl)
+        }
+        val names = urls
+            .mapNotNull { CookieManager.getInstance().getCookie(it) }
+            .flatMap { it.split(";") }
+            .map { it.substringBefore("=").trim().lowercase() }
+        return names.any { it.contains("session") || it.contains("auth") || it.contains("token") }
     }
 
     fun confirmLoginManually() {
@@ -84,12 +133,6 @@ class WebViewLoginViewModel @Inject constructor(
         }
     }
 
-    private fun looksLikeLoggedInPage(url: String): Boolean {
-        val u = url.lowercase()
-        // 简单启发：URL 不再包含登录路径关键字
-        val loginKeywords = listOf("/auth", "/login", "/signin", "/oauth")
-        return loginKeywords.none { u.contains(it) }
-    }
 }
 
 data class WebViewLoginUiState(
