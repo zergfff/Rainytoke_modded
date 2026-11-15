@@ -636,4 +636,8 @@
     <string name="weather_legacy_hint">Only if this ROM cannot sign Ed25519</string>
     <string name="weather_cred_incomplete">Fill in API Host + Credential ID + Developer ID + Project ID + Private key</string>
     <string name="widget_balance_remaining">Remaining</string>
+    <string name="credential_webview_login">Sign in with in-app browser</string>
+    <string name="credential_import_cookies_txt">Import cookies.txt</string>
+    <string name="credential_import_cookies_ok">Cookies imported</string>
+    <string name="credential_import_cookies_fail">No Open Design cookie found in that file (export cookies.txt including open-design.ai)</string>
 </resources>

@@ -629,4 +629,8 @@
     <string name="weather_legacy_hint">僅在本機無法做 Ed25519 簽名時使用</string>
     <string name="weather_cred_incomplete">請填全 API Host + 憑證 ID + 開發者 ID + 專案 ID + 私鑰</string>
     <string name="widget_balance_remaining">剩餘</string>
+    <string name="credential_webview_login">用內建瀏覽器登入</string>
+    <string name="credential_import_cookies_txt">匯入 cookies.txt</string>
+    <string name="credential_import_cookies_ok">Cookie 已匯入</string>
+    <string name="credential_import_cookies_fail">檔案裡沒有 Open Design 的 Cookie（請匯出包含 open-design.ai 的 cookies.txt）</string>
 </resources>

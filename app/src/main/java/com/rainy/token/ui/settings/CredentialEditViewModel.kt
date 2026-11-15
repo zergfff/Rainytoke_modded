@@ -5,6 +5,7 @@ import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.rainy.token.R
+import com.rainy.token.data.repository.CookieFileImport
 import com.rainy.token.data.repository.CredentialRepository
 import com.rainy.token.data.repository.RepositoryError
 import com.rainy.token.domain.model.CookieEntry
@@ -368,6 +369,55 @@ class CredentialEditViewModel @Inject constructor(
     }
 
     // ─── Open Design Cloud ───
+
+    /**
+     * 从 SAF 选中的 cookies.txt 导入 Open Design 会话 Cookie。
+     *
+     * 这条路给「浏览器是 Firefox/IceRaven、又不想在 APP 内置 WebView 里重登」的用户：
+     * 在浏览器里用导出扩展生成 cookies.txt，选文件即可，不需要 root。
+     */
+    fun importCookiesTxt(context: android.content.Context, uri: android.net.Uri) {
+        val type = serviceType ?: return
+        viewModelScope.launch {
+            val text = runCatching {
+                context.contentResolver.openInputStream(uri)
+                    ?.bufferedReader(Charsets.UTF_8)
+                    ?.use { it.readText() }
+            }.getOrNull()
+
+            if (text.isNullOrBlank()) {
+                _uiState.update { it.copy(message = UiText.Resource(R.string.credential_import_cookies_fail)) }
+                return@launch
+            }
+
+            val imported = CookieFileImport.parseNetscape(text, "open-design.ai")
+            if (imported.isEmpty()) {
+                _uiState.update { it.copy(message = UiText.Resource(R.string.credential_import_cookies_fail)) }
+                return@launch
+            }
+
+            val cookies = imported.map { value ->
+                com.rainy.token.domain.model.CookieEntry(
+                    name = value.name,
+                    value = value.value,
+                    domain = value.domain
+                )
+            }
+            val existing = credentialRepository.get(type) as? Credential.SessionCredential
+            val updated = (existing ?: Credential.SessionCredential(service = type, cookies = cookies))
+                .copy(cookies = cookies, lastVerifiedAt = System.currentTimeMillis())
+            credentialRepository.save(updated)
+
+            _uiState.update {
+                it.copy(
+                    cookieInput = cookies.joinToString("; ") { c -> "${c.name}=${c.value}" },
+                    cookieCount = cookies.size,
+                    hasExisting = true,
+                    message = UiText.Resource(R.string.credential_import_cookies_ok)
+                )
+            }
+        }
+    }
 
     fun saveOpenDesignSession() {
         val current = _uiState.value

@@ -40,6 +40,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
@@ -173,7 +175,9 @@ fun CredentialEditScreen(
                                 onSave = { viewModel.saveOpenDesignSession() },
                                 onTestAndSave = { viewModel.testAndSaveOpenDesign() },
                                 onCopyLoginUrl = { copyToClipboard(context, uiState.loginUrl) },
-                                onOpenLoginUrl = { openInBrowser(context, uiState.loginUrl) }
+                                onOpenLoginUrl = { openInBrowser(context, uiState.loginUrl) },
+                                onStartWebViewLogin = { onStartWebViewLogin(ServiceType.OPEN_DESIGN) },
+                                onImportCookiesFile = { uri -> viewModel.importCookiesTxt(context, uri) }
                             )
                         } else if (service == ServiceType.OPENCODE_GO) {
                             OpenCodeGoForm(
@@ -673,8 +677,15 @@ private fun OpenDesignForm(
     onSave: () -> Unit,
     onTestAndSave: () -> Unit,
     onCopyLoginUrl: () -> Unit,
-    onOpenLoginUrl: () -> Unit
+    onOpenLoginUrl: () -> Unit,
+    onStartWebViewLogin: () -> Unit,
+    onImportCookiesFile: (android.net.Uri) -> Unit
 ) {
+    // cookies.txt 选择器：Firefox/IceRaven 用户先用导出扩展生成文件，再在这里导入
+    val pickCookiesFile = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri -> if (uri != null) onImportCookiesFile(uri) }
+
     Text(
         text = stringResource(R.string.open_design_title),
         style = MaterialTheme.typography.titleMedium
@@ -699,6 +710,21 @@ private fun OpenDesignForm(
         style = MaterialTheme.typography.bodySmall,
         color = MaterialTheme.colorScheme.outline
     )
+
+    // 自动抓 Cookie 的两条路：内置浏览器登录 / 导入浏览器导出的 cookies.txt
+    androidx.compose.foundation.layout.Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 8.dp),
+        horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp)
+    ) {
+        TextButton(onClick = onStartWebViewLogin) {
+            Text(stringResource(R.string.credential_webview_login))
+        }
+        TextButton(onClick = { pickCookiesFile.launch(arrayOf("*/*")) }) {
+            Text(stringResource(R.string.credential_import_cookies_txt))
+        }
+    }
 
     Text(
         text = stringResource(R.string.or_manual_import),
