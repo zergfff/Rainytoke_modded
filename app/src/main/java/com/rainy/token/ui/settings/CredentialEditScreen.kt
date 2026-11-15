@@ -177,7 +177,8 @@ fun CredentialEditScreen(
                                 onCopyLoginUrl = { copyToClipboard(context, uiState.loginUrl) },
                                 onOpenLoginUrl = { openInBrowser(context, uiState.loginUrl) },
                                 onStartWebViewLogin = { onStartWebViewLogin(ServiceType.OPEN_DESIGN) },
-                                onImportCookiesFile = { uri -> viewModel.importCookiesTxt(context, uri) }
+                                onImportCookiesFile = { uri -> viewModel.importCookiesTxt(context, uri) },
+                                onImportFromBrowserRoot = { viewModel.importFromBrowserRoot(context) }
                             )
                         } else if (service == ServiceType.OPENCODE_GO) {
                             OpenCodeGoForm(
@@ -679,7 +680,8 @@ private fun OpenDesignForm(
     onCopyLoginUrl: () -> Unit,
     onOpenLoginUrl: () -> Unit,
     onStartWebViewLogin: () -> Unit,
-    onImportCookiesFile: (android.net.Uri) -> Unit
+    onImportCookiesFile: (android.net.Uri) -> Unit,
+    onImportFromBrowserRoot: () -> Unit
 ) {
     // cookies.txt 选择器：Firefox/IceRaven 用户先用导出扩展生成文件，再在这里导入
     val pickCookiesFile = rememberLauncherForActivityResult(
@@ -724,6 +726,9 @@ private fun OpenDesignForm(
         TextButton(onClick = { pickCookiesFile.launch(arrayOf("*/*")) }) {
             Text(stringResource(R.string.credential_import_cookies_txt))
         }
+    }
+    TextButton(onClick = onImportFromBrowserRoot) {
+        Text(stringResource(R.string.credential_import_browser_root))
     }
 
     Text(

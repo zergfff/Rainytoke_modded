@@ -5,6 +5,7 @@ import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.rainy.token.R
+import com.rainy.token.data.repository.BrowserCookieExtractor
 import com.rainy.token.data.repository.CookieFileImport
 import com.rainy.token.data.repository.CredentialRepository
 import com.rainy.token.data.repository.RepositoryError
@@ -396,26 +397,55 @@ class CredentialEditViewModel @Inject constructor(
                 return@launch
             }
 
-            val cookies = imported.map { value ->
-                com.rainy.token.domain.model.CookieEntry(
-                    name = value.name,
-                    value = value.value,
-                    domain = value.domain
-                )
-            }
-            val existing = credentialRepository.get(type) as? Credential.SessionCredential
-            val updated = (existing ?: Credential.SessionCredential(service = type, cookies = cookies))
-                .copy(cookies = cookies, lastVerifiedAt = System.currentTimeMillis())
-            credentialRepository.save(updated)
+            saveImportedCookies(type, imported, R.string.credential_import_cookies_ok)
+        }
+    }
 
-            _uiState.update {
-                it.copy(
-                    cookieInput = cookies.joinToString("; ") { c -> "${c.name}=${c.value}" },
-                    cookieCount = cookies.size,
-                    hasExisting = true,
-                    message = UiText.Resource(R.string.credential_import_cookies_ok)
-                )
+    /**
+     * 已 root 的设备：直接读本机 Firefox / IceRaven 的 cookies.sqlite
+     * （su 拷贝一份到缓存目录，只读查询 moz_cookies 表，查完删掉）。
+     */
+    fun importFromBrowserRoot(context: android.content.Context) {
+        val type = serviceType ?: return
+        viewModelScope.launch {
+            val result = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                BrowserCookieExtractor.extract("open-design.ai", context.cacheDir)
             }
+            if (result == null || result.cookies.isEmpty()) {
+                _uiState.update {
+                    it.copy(message = UiText.Resource(R.string.credential_import_root_fail))
+                }
+                return@launch
+            }
+            saveImportedCookies(type, result.cookies, R.string.credential_import_cookies_ok)
+        }
+    }
+
+    /** 两条导入路径的公共落盘逻辑 */
+    private suspend fun saveImportedCookies(
+        type: ServiceType,
+        imported: List<CookieFileImport.ImportedCookie>,
+        messageRes: Int
+    ) {
+        val cookies = imported.map { value ->
+            com.rainy.token.domain.model.CookieEntry(
+                name = value.name,
+                value = value.value,
+                domain = value.domain
+            )
+        }
+        val existing = credentialRepository.get(type) as? Credential.SessionCredential
+        val updated = (existing ?: Credential.SessionCredential(service = type, cookies = cookies))
+            .copy(cookies = cookies, lastVerifiedAt = System.currentTimeMillis())
+        credentialRepository.save(updated)
+
+        _uiState.update {
+            it.copy(
+                cookieInput = cookies.joinToString("; ") { c -> "${c.name}=${c.value}" },
+                cookieCount = cookies.size,
+                hasExisting = true,
+                message = UiText.Resource(messageRes)
+            )
         }
     }
 

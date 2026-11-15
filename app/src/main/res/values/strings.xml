@@ -640,4 +640,6 @@
     <string name="credential_import_cookies_txt">Import cookies.txt</string>
     <string name="credential_import_cookies_ok">Cookies imported</string>
     <string name="credential_import_cookies_fail">No Open Design cookie found in that file (export cookies.txt including open-design.ai)</string>
+    <string name="credential_import_browser_root">Read browser cookies (root)</string>
+    <string name="credential_import_root_fail">Read failed: grant root to this app and make sure you are logged in to Open Design in the browser</string>
 </resources>

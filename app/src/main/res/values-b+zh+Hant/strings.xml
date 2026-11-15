@@ -633,4 +633,6 @@
     <string name="credential_import_cookies_txt">匯入 cookies.txt</string>
     <string name="credential_import_cookies_ok">Cookie 已匯入</string>
     <string name="credential_import_cookies_fail">檔案裡沒有 Open Design 的 Cookie（請匯出包含 open-design.ai 的 cookies.txt）</string>
+    <string name="credential_import_browser_root">從瀏覽器直讀（root）</string>
+    <string name="credential_import_root_fail">讀取失敗：請確認已給本 APP 授予 root 權限，且瀏覽器裡已登入 Open Design</string>
 </resources>
