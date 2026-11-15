@@ -48,6 +48,9 @@ enum class WidgetElement(
     /** 天气温度文字 */
     WEATHER("weather", 25f),
 
+    /** 空气质量文字（优 121 / 轻度污染） */
+    AQI("aqi", 12f),
+
     /** 服务标题，如 "OpenCode Go 配额" */
     TITLE("title", 14f),
 

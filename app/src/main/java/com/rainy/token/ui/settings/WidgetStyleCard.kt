@@ -327,6 +327,7 @@ private fun BackgroundStyleRow(
 }
 
 private fun elementLabel(e: WidgetElement): String = when (e) {
+    WidgetElement.AQI -> "空气质量"
     WidgetElement.TIME -> "时间"
     WidgetElement.WEEKDAY -> "星期"
     WidgetElement.DATE -> "日期"
