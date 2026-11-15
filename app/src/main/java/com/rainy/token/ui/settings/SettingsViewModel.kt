@@ -239,7 +239,9 @@ class SettingsViewModel @Inject constructor(
                     city = outcome.snapshot.city,
                     text = outcome.snapshot.text,
                     icon = outcome.snapshot.icon,
-                    temp = outcome.snapshot.tempC
+                    temp = outcome.snapshot.tempC,
+                    aqi = outcome.snapshot.aqi,
+                    aqiCategory = outcome.snapshot.aqiCategory
                 )
                 refreshWidgets()
             }

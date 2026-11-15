@@ -53,6 +53,8 @@ class AppSettingsStore @Inject constructor(
         val weatherText = stringPreferencesKey("weather_text")
         val weatherIcon = stringPreferencesKey("weather_icon")
         val weatherTemp = stringPreferencesKey("weather_temp")
+        val weatherAqi = stringPreferencesKey("weather_aqi")
+        val weatherAqiCategory = stringPreferencesKey("weather_aqi_category")
         val weatherLatitude = floatPreferencesKey("weather_latitude")
         val weatherLongitude = floatPreferencesKey("weather_longitude")
         val lastWeatherFetchAt = longPreferencesKey("last_weather_fetch_at")
@@ -87,6 +89,8 @@ class AppSettingsStore @Inject constructor(
     val weatherText: Flow<String> = ds.data.map { it[Keys.weatherText] ?: "" }
     val weatherIcon: Flow<String> = ds.data.map { it[Keys.weatherIcon] ?: "" }
     val weatherTemp: Flow<String> = ds.data.map { it[Keys.weatherTemp] ?: "" }
+    val weatherAqi: Flow<String> = ds.data.map { it[Keys.weatherAqi] ?: "" }
+    val weatherAqiCategory: Flow<String> = ds.data.map { it[Keys.weatherAqiCategory] ?: "" }
     val weatherLatitude: Flow<Float> = ds.data.map { it[Keys.weatherLatitude] ?: 0f }
     val weatherLongitude: Flow<Float> = ds.data.map { it[Keys.weatherLongitude] ?: 0f }
     val lastWeatherFetchAt: Flow<Long> = ds.data.map { it[Keys.lastWeatherFetchAt] ?: 0L }
@@ -239,13 +243,17 @@ class AppSettingsStore @Inject constructor(
         city: String,
         text: String,
         icon: String,
-        temp: String
+        temp: String,
+        aqi: String = "",
+        aqiCategory: String = ""
     ) {
         ds.edit {
             it[Keys.weatherCity] = city
             it[Keys.weatherText] = text
             it[Keys.weatherIcon] = icon
             it[Keys.weatherTemp] = temp
+            it[Keys.weatherAqi] = aqi
+            it[Keys.weatherAqiCategory] = aqiCategory
             it[Keys.lastWeatherFetchAt] = System.currentTimeMillis()
         }
     }

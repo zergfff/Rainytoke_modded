@@ -42,7 +42,11 @@ class WeatherRepository @Inject constructor(
         val city: String,
         val tempC: String,
         val text: String,
-        val icon: String
+        val icon: String,
+        /** 空气质量指数（v7 /air/now 的 aqi），取不到为空串 */
+        val aqi: String = "",
+        /** 空气质量等级文案（优 / 良 / 轻度污染…），取不到为空串 */
+        val aqiCategory: String = ""
     )
 
     sealed interface Outcome {
@@ -156,18 +160,41 @@ class WeatherRepository @Inject constructor(
                     else -> "key"
                 }
             )
+            // 3. 空气质量 v7：失败不影响天气本身，AQI 留空即可
+            val airQuality = fetchAirQuality(host, cityId, keyQuery, bearer)
+
             Outcome.Ok(
                 Snapshot(
                     city = cityName,
                     tempC = now.optString("temp", "--"),
                     text = now.optString("text", ""),
-                    icon = now.optString("icon", "")
+                    icon = now.optString("icon", ""),
+                    aqi = airQuality.first,
+                    aqiCategory = airQuality.second
                 )
             )
         } catch (t: Throwable) {
             log(context, "WEATHER_FAIL", "err" to describe(t))
             Outcome.Fail(describe(t))
         }
+    }
+
+    /**
+     * 空气质量：`GET /v7/air/now?location={cityId}&lang=zh`
+     * 响应 `{"now":{"aqi":"42","category":"优","pm2p5":"18",...}}`。
+     * 取不到就返回空串——AQI 是锦上添花，不能因为它拖垮天气。
+     */
+    private fun fetchAirQuality(
+        host: String,
+        cityId: String,
+        keyQuery: String,
+        bearer: String?
+    ): Pair<String, String> {
+        val result = httpGet("https://" + host + "/v7/air/now?location=" + cityId + "&lang=zh" + keyQuery, bearer)
+        val body = result.second
+        if (result.first != HTTP_OK || body == null) return "" to ""
+        val air = runCatching { JSONObject(body).optJSONObject("now") }.getOrNull() ?: return "" to ""
+        return air.optString("aqi", "").trim() to air.optString("category", "").trim()
     }
 
     /** 返回 (HTTP 状态码, 响应体)。失败也把 body 带回来，里面是和风的错误码。 */

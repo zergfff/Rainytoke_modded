@@ -289,9 +289,22 @@ class OpenCodeGoWidgetProvider : AppWidgetProvider() {
                         R.id.widget_weather,
                         WidgetStyleDefaults.styledText(tempLabel, weatherStyle)
                     )
+
+                    // 空气质量：等级 + 指数（优 42），没有就隐藏
+                    val aqiCategory = store.weatherAqiCategory.first().trim()
+                    val aqi = store.weatherAqi.first().trim()
+                    val aqiLabel = listOf(aqiCategory, aqi).filter { it.isNotEmpty() }.joinToString(" ")
+                    if (aqiLabel.isNotEmpty()) {
+                        views.setTextViewText(R.id.widget_aqi, aqiLabel)
+                        views.setViewVisibility(R.id.widget_aqi, android.view.View.VISIBLE)
+                    } else {
+                        views.setViewVisibility(R.id.widget_aqi, android.view.View.GONE)
+                    }
+
                     views.setViewVisibility(R.id.widget_weather_group, android.view.View.VISIBLE)
                 } else {
                     // 无天气数据：整组隐藏，不占位
+                    views.setViewVisibility(R.id.widget_aqi, android.view.View.GONE)
                     views.setViewVisibility(R.id.widget_weather_group, android.view.View.GONE)
                 }
             } catch (_: Exception) {
@@ -319,6 +332,8 @@ private fun applyFontScale(
         R.id.widget_weekday to WidgetElement.WEEKDAY,
         R.id.widget_date to WidgetElement.DATE,
         R.id.widget_weather to WidgetElement.WEATHER,
+        // AQI 用天气元素的颜色，但字号固定小一号（14sp 基准）
+        R.id.widget_aqi to WidgetElement.WEATHER,
         R.id.widget_service_title to WidgetElement.TITLE,
         R.id.row1_label to WidgetElement.ROW_LABEL,
         R.id.row2_label to WidgetElement.ROW_LABEL,
@@ -348,6 +363,9 @@ private fun applyFontScale(
 
     // 天气图标与温度文字等高：sp 会随系统字体缩放变化，dp 不会，
     // 所以图标尺寸跟随天气文字的 sp 值一起缩放，避免两者高度脱节。
+    // AQI 跟随天气字号一起缩放，但基准固定 14sp（不继承 WEATHER 的 25sp）
+    views.setTextViewTextSize(R.id.widget_aqi, TypedValue.COMPLEX_UNIT_SP, 14f * scale)
+
     val weatherIconSize = (styles[WidgetElement.WEATHER]?.sizeSp ?: 25f) * scale
     views.setViewLayoutWidth(R.id.widget_weather_icon, weatherIconSize, TypedValue.COMPLEX_UNIT_DIP)
     views.setViewLayoutHeight(R.id.widget_weather_icon, weatherIconSize, TypedValue.COMPLEX_UNIT_DIP)

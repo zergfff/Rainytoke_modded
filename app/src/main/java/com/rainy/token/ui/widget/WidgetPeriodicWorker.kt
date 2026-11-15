@@ -84,7 +84,9 @@ class WidgetPeriodicWorker @AssistedInject constructor(
                         city = outcome.snapshot.city,
                         text = outcome.snapshot.text,
                         icon = outcome.snapshot.icon,
-                        temp = outcome.snapshot.tempC
+                        temp = outcome.snapshot.tempC,
+                        aqi = outcome.snapshot.aqi,
+                        aqiCategory = outcome.snapshot.aqiCategory
                     )
                     is WeatherRepository.Outcome.Fail ->
                         FileDebugLog.w(ctx, "WEATHER_SKIP", "why" to outcome.reason)
